@@ -4,7 +4,7 @@ local client_camera_angles, client_color_log, client_create_interface, client_de
 
 ---[ Vars ]---
 client_color_log(180, 238, 0, '---[ Info ]---')
-client_color_log(255, 255, 255, 'Last update: 7 June 2020')
+client_color_log(255, 255, 255, 'Last update: 8 June 2020')
 client_color_log(255, 255, 255, 'If you have a problem post a message on the forum.')
 client_color_log(180, 238, 0, '--------------')
 
@@ -17,7 +17,6 @@ local vars = {
 	closest_enemy = nil,
 	visible = false,
 	fire = false,
-	penetration = false,
 	penetration_shotme = false,
 	cached_target,
 	oldcfg = nil,
@@ -35,6 +34,8 @@ local vars = {
 	legitaa_stop3 = false,
 	legitaa_stop4 = false,
 	legitaa_stop5 = false,
+	legitaa_updates = 0,
+	legitaa_target = 0,
 }
 
 local weapon_classes = {
@@ -198,6 +199,7 @@ local legitaa = {
 	both_arrows = ui_new_checkbox('AA', 'Anti-aimbot angles', 'Show both arrows'),
 	arrows_color = ui_new_color_picker('AA', 'Anti-aimbot angles', '\nShow both arrows', 255, 255, 255, 255),
 	aa_mode = { ui_new_combobox('AA', 'Anti-aimbot angles', 'Mode', 'Safe', 'Maximum') },
+	aa_mode_v2 = ui_new_combobox('AA', 'Anti-aimbot angles', 'Exploits', { 'Off', 'Fake twist', 'Fake jitter', 'Fake max', 'Cradle', 'Shake' } ),
 	auto_off = { ui_new_multiselect('AA', 'Anti-aimbot angles', 'Auto-Off', 'Show sliders', 'FPS', 'Ping', 'Speed', 'Loss', 'Choke') },
 	fps_slider = ui_new_slider('AA', 'Anti-aimbot angles', 'FPS threshold', 59, 300, 59, true, '', 1, FpsTable()),
 	ping_slider = ui_new_slider('AA', 'Anti-aimbot angles', 'Ping threshold', 0, 150, 75, true, 'ms'),
@@ -401,11 +403,13 @@ local function visibility()
 		ui_set_visible(legitaa.indicators[1], true)
 		ui_set_visible(legitaa.aa_mode[1], true)
 		ui_set_visible(legitaa.auto_off[1], true)
+		ui_set_visible(legitaa.aa_mode_v2, true)
 	else
 		ui_set_visible(legitaa.legitaa_key, false)
 		ui_set_visible(legitaa.indicators[1], false)
 		ui_set_visible(legitaa.aa_mode[1], false)
 		ui_set_visible(legitaa.auto_off[1], false)
+		ui_set_visible(legitaa.aa_mode_v2, false)
 	end
 
 	if aa_indicators then
@@ -495,11 +499,11 @@ local function on_paint(ctx)
 	end
 
 	if penetration and indicator_penetration then
-		renderer_indicator(r, g, b, a, 'AW')
+		renderer_indicator(r, g, b, a, 'AP')
 	end
 
 	if fire and indicator_fire then
-		renderer_indicator(r, g, b, a, 'TM')
+		renderer_indicator(r, g, b, a, 'AF')
 	end
 
 	if IsFire or improvements_hotkey and table_contains(ui_get(semirage.improvements_mode[1]), current_weapon) then
@@ -508,10 +512,10 @@ local function on_paint(ctx)
 		vars.fire = false
 	end
 
-	if IsPenetration then
-		vars.penetration = true
+	if vars.penetration_shotme or IsPenetration or vars.visible then
+		ui_set(rage.penetration, true)
 	else
-		vars.penetration = false
+		ui_set(rage.penetration, false)
 	end
 
 	if IsForceBodyAim and indicator_baim then
@@ -790,16 +794,10 @@ client_set_event_callback('paint', function()
 		return
 	end
 
-	if vars.penetration_shotme or vars.penetration or vars.visible then
-		ui_set(rage.penetration, true)
-	else
-		ui_set(rage.penetration, false)
-	end
 end)
 
 client_set_event_callback('round_start', function()
 	vars.visible = false
-	vars.penetration = false
 	vars.penetration_shotme = false
 	vars.name_player = nil
 end)
@@ -898,7 +896,7 @@ local function HandleMenu()
 	else
 		if check then
 			check = false
-			if oldcfg == ui_get(misc.cfg) then
+			if oldcfg == ui_get(misc.cfg[1]) then
 				ui_set(aa.antiaim[1], false)
 			end
 		end
@@ -1190,5 +1188,57 @@ end)
 
 client_set_event_callback('shutdown', function() 
 	ui_set(players.reset_all, true)
+end)
+---------------------
+
+---[ Function #8 ]---
+local updates = vars.legitaa_updates
+local targeted = vars.legitaa_target
+
+client_set_event_callback('setup_command', function(cmd)
+
+	if cmd.chokedcommands == 0 then
+		updates = updates + 1
+		targeted = targeted + 1
+	end
+		
+	if targeted >= ui_get(fl.limit) then
+		targeted = 0
+	end
+		
+	if cmd.in_forward == 0 and cmd.in_back == 0 and cmd.in_moveleft == 0 and cmd.in_moveright == 0 then
+		cmd.allow_send_packet = false
+		if ui_get(legitaa.aa_mode_v2) == 'Fake twist' then 
+			ui_set(legitaa.aa_mode[1], 'Maximum')
+			ui_set(fl.limit, 6)
+			if (cmd.chokedcommands % (updates % 2 == 0 and ui_get(fl.limit) / 2 or 0 ) == 0 ) then
+				cmd.forwardmove = 1.01
+			end
+		elseif ui_get(legitaa.aa_mode_v2) == 'Fake jitter' then 
+			ui_set(legitaa.aa_mode[1], 'Maximum')
+			ui_set(fl.limit, 6)
+			if cmd.chokedcommands % 2 ~= 0 and cmd.chokedcommands % targeted == 0 then
+				cmd.forwardmove = 1.01
+			end
+		elseif ui_get(legitaa.aa_mode_v2) == 'Fake max' then 
+			ui_set(legitaa.aa_mode[1], 'Maximum')
+			ui_set(fl.limit, 6)
+			if cmd.chokedcommands % targeted then
+				cmd.forwardmove = 1.01
+			end
+		elseif ui_get(legitaa.aa_mode_v2) == 'Cradle' then
+			ui_set(legitaa.aa_mode[1], 'Maximum')
+			ui_set(fl.limit, 6)
+			if cmd.chokedcommands % targeted == 0 then
+				cmd.forwardmove = 1.01
+			end
+		elseif ui_get(legitaa.aa_mode_v2) == 'Shake' then
+			ui_set(legitaa.aa_mode[1], 'Maximum')
+			ui_set(fl.limit, 3) 
+			if cmd.chokedcommands % 3 == 0 or cmd.chokedcommands % targeted / 2 == 0 then
+				cmd.forwardmove = 1.01
+			end
+		end
+	end
 end)
 ---------------------
