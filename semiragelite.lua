@@ -769,9 +769,9 @@ end
 client_set_event_callback('player_hurt', penetration_shotme)
 
 client_set_event_callback('paint', function()
-	local on_hotkey = table_contains(ui_get(semirage.penetration_mode[1]), 'Visible')
+	local visible = table_contains(ui_get(semirage.penetration_mode[1]), 'Visible')
 
-	if on_hotkey then
+	if visible then
 		local enemy_visible, enemy_entindex = check_fov()
 		if enemy_entindex == nil then 
 			return 
@@ -787,7 +787,7 @@ client_set_event_callback('paint', function()
         end
 		vars.cached_target = enemy_entindex
 	else
-		vars.visible = false
+		return
 	end
 
 	if vars.penetration_shotme or vars.penetration or vars.visible then
