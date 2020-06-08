@@ -485,6 +485,7 @@ local function on_paint(ctx)
 
 	local enabled, fov, penetration, fire = ui_get(rage.ragebot[1]), ui_get(rage.fov), ui_get(rage.penetration), ui_get(rage.fire)
 	local improvements_hotkey = ui_get(semirage.improvements_hotkey)
+	local FireOn, PenetrationOn = ui_get(semirage.fire), ui_get(semirage.penetration)
 	local IsFire = ui_get(semirage.fire_hotkey)
 	local IsPenetration = ui_get(semirage.penetration_hotkey) 
 	local IsForceSafePoint = ui_get(rage.force_safe_point)
@@ -506,18 +507,6 @@ local function on_paint(ctx)
 		renderer_indicator(r, g, b, a, 'AF')
 	end
 
-	if IsFire or improvements_hotkey and table_contains(ui_get(semirage.improvements_mode[1]), current_weapon) then
-		vars.fire = true
-	else
-		vars.fire = false
-	end
-
-	if vars.penetration_shotme or IsPenetration or vars.visible then
-		ui_set(rage.penetration, true)
-	else
-		ui_set(rage.penetration, false)
-	end
-
 	if IsForceBodyAim and indicator_baim then
 		renderer_indicator(r, g, b, a, 'BM')
 	end
@@ -526,7 +515,19 @@ local function on_paint(ctx)
 		renderer_indicator(r, g, b, a, 'SP')
 	end
 
-	if vars.fire then
+	if IsFire or improvements_hotkey and table_contains(ui_get(semirage.improvements_mode[1]), current_weapon) then
+		vars.fire = true
+	else
+		vars.fire = false
+	end
+
+	if PenetrationOn and vars.penetration_shotme or PenetrationOn and IsPenetration or PenetrationOn and vars.visible then
+		ui_set(rage.penetration, true)
+	else
+		ui_set(rage.penetration, false)
+	end
+
+	if vars.fire and FireOn then
 		ui_set(rage.ragebot[2], 'Always on')
 		ui_set(rage.fire, true)
 	else
@@ -896,7 +897,7 @@ local function HandleMenu()
 	else
 		if check then
 			check = false
-			if oldcfg == ui_get(misc.cfg[1]) then
+			if oldcfg == ui_get(misc.cfg) then
 				ui_set(aa.antiaim[1], false)
 			end
 		end
