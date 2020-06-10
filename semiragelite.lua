@@ -112,6 +112,7 @@ local rage = {
 	miss = ui_reference('RAGE', 'Aimbot', 'Log misses due to spread'),
 	force_safe_point = ui_reference('RAGE', 'Aimbot', 'Force safe point'),
 	force_body_aim = ui_reference('RAGE', 'Other', 'Force body aim'),
+	override = ui_reference('RAGE', 'Other', 'Anti-aim correction override'),
 }
 
 local aa = {
@@ -184,7 +185,7 @@ local semirage = {
 	dynamicfov_indicators2 = { ui_new_combobox('RAGE', 'Other', '\nIndicators2', 'Off', 'Change circle color', 'Draw hitboxes') },
 	dynamicfov_colors2 = ui_new_color_picker('RAGE', 'Other', '\nIndicators2', 194, 20, 20, 50),
 	indicators = ui_new_checkbox('RAGE', 'Other', 'Indicators'),
-	indicators_mode = { ui_new_multiselect('RAGE', 'Other', '\nIndicators', 'Automatic fire', 'Automatic penetration', 'Force body aim', 'Force safe point') },
+	indicators_mode = { ui_new_multiselect('RAGE', 'Other', '\nIndicators', 'Automatic fire', 'Automatic penetration', 'Force body aim', 'Force safe point', 'Override') },
 	indicators_color = ui_new_color_picker('RAGE', 'Other', '\nIndicators', 123, 194, 21, 255),
 	advanced_logs = ui_new_checkbox('RAGE', 'Other', 'Advanced logs'),
 	logs_mode = { ui_new_multiselect('RAGE', 'Other', '\nAdvanced logs', 'Fire', 'Hit', 'Miss')},
@@ -490,10 +491,12 @@ local function on_paint(ctx)
 	local IsPenetration = ui_get(semirage.penetration_hotkey) 
 	local IsForceSafePoint = ui_get(rage.force_safe_point)
 	local IsForceBodyAim = ui_get(rage.force_body_aim)
+	local IsOverride = ui_get(rage.override)
 	local indicator_fire = table_contains(ui_get(semirage.indicators_mode[1]), 'Automatic fire')
 	local indicator_penetration = table_contains(ui_get(semirage.indicators_mode[1]), 'Automatic penetration')
 	local indicator_baim = table_contains(ui_get(semirage.indicators_mode[1]), 'Force body aim')
 	local indicator_safe = table_contains(ui_get(semirage.indicators_mode[1]), 'Force safe point')
+	local indicator_override = table_contains(ui_get(semirage.indicators_mode[1]), 'Override')
 
 	if enabled then
 		renderer_indicator(r, g, b, a, 'FOV: ', fov, '°')
@@ -513,6 +516,10 @@ local function on_paint(ctx)
 
 	if IsForceSafePoint and indicator_safe then
 		renderer_indicator(r, g, b, a, 'SP')
+	end
+
+	if IsOverride and indicator_override then
+		renderer_indicator(r, g, b, a, 'OV')
 	end
 
 	if IsFire or improvements_hotkey and table_contains(ui_get(semirage.improvements_mode[1]), current_weapon) then
