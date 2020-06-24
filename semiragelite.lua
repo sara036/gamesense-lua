@@ -4,7 +4,7 @@ local client_camera_angles, client_color_log, client_create_interface, client_de
 
 ---[ Vars ]---
 client_color_log(180, 238, 0, '---[ Info ]---')
-client_color_log(255, 255, 255, 'Last update: 8 June 2020')
+client_color_log(255, 255, 255, 'Last update: 24 June 2020')
 client_color_log(255, 255, 255, 'If you have a problem post a message on the forum.')
 client_color_log(180, 238, 0, '--------------')
 
