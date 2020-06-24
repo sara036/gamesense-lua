@@ -915,11 +915,15 @@ local function HandleMenu()
 end
 
 local function conditions()
+
+	local fakeduck = ui_reference('RAGE', 'Other', 'Duck peek assist')
+
 	local stop_1 = vars.legitaa_stop1
 	local stop_2 = vars.legitaa_stop2
 	local stop_3 = vars.legitaa_stop3
 	local stop_4 = vars.legitaa_stop4
 	local stop_5 = vars.legitaa_stop5
+	local stop_6 = ui_get(fakeduck)
 
 	if stop_1 then
 		ui_set(aa.antiaim[1], false)
@@ -930,6 +934,8 @@ local function conditions()
 	elseif stop_4 then
 		ui_set(aa.antiaim[1], false)
 	elseif stop_5 then
+		ui_set(aa.antiaim[1], false)
+	elseif stop_6 then
 		ui_set(aa.antiaim[1], false)
 	else
 		ui_set(aa.antiaim[1], true)
