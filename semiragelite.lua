@@ -475,7 +475,7 @@ local function visibility()
 		ui_set_visible(useless.fake_yaw_limit[1], true)
 	end
 end
-client_set_event_callback('paint', visibility)
+client_set_event_callback('pre_render', visibility)
 ---------------------
 
 ---[ Function #2 ]---
