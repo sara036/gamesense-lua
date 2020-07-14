@@ -6,6 +6,7 @@ local client_camera_angles, client_color_log, client_create_interface, client_de
 client_color_log(180, 238, 0, '---[ Info ]---')
 client_color_log(255, 255, 255, 'Last update: 14 July 2020')
 client_color_log(255, 255, 255, 'If you have a problem post a message on the forum.')
+client_color_log(255, 255, 255, 'Last change: Edit 1sec min to 0sec for the penetration turn on if enemy shot you.')
 client_color_log(180, 238, 0, '--------------')
 
 local ffi = require('ffi')
