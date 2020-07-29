@@ -4,9 +4,9 @@ local client_camera_angles, client_color_log, client_create_interface, client_de
 
 ---[ Vars ]---
 client_color_log(180, 238, 0, '---[ Info ]---')
-client_color_log(255, 255, 255, 'Last update: 14 July 2020')
+client_color_log(255, 255, 255, 'Last update: 29 July 2020')
 client_color_log(255, 255, 255, 'If you have a problem post a message on the forum.')
-client_color_log(255, 255, 255, 'Last change: Edit 1sec min to 0sec for the penetration turn on if enemy shot you.')
+client_color_log(255, 255, 255, 'Last change: Changed name.')
 client_color_log(180, 238, 0, '--------------')
 
 local ffi = require('ffi')
@@ -163,7 +163,7 @@ local useless = {
 
 ---[ Menu ]---
 local semirage = {
-	lite = ui_new_checkbox('RAGE', 'Other', 'Semirage lite'),
+	lite = ui_new_checkbox('RAGE', 'Other', 'Semirage'),
 	improvements = ui_new_checkbox('RAGE', 'Other', 'Improvements'),
 	improvements_mode = { ui_new_multiselect('RAGE', 'Other', 'Aimbot improvements', 'Snipers', 'Deagle', 'Pistols', 'Rifles', 'SMGs', 'Machine guns', 'Shotguns') },
 	improvements_hotkey = ui_new_hotkey('RAGE', 'Other', '\nAimbot improvements', true, 0x01),
