@@ -6,7 +6,7 @@ local client_camera_angles, client_color_log, client_create_interface, client_de
 client_color_log(180, 238, 0, '---[ Info ]---')
 client_color_log(255, 255, 255, 'Last update: 29 July 2020')
 client_color_log(255, 255, 255, 'If you have a problem post a message on the forum.')
-client_color_log(255, 255, 255, 'Last change: Changed name.')
+client_color_log(255, 255, 255, 'Last change: Change the name of the lua, Added Auto-Off Tabbed out.')
 client_color_log(180, 238, 0, '--------------')
 
 local ffi = require('ffi')
@@ -202,7 +202,7 @@ local legitaa = {
 	arrows_color = ui_new_color_picker('AA', 'Anti-aimbot angles', '\nShow both arrows', 255, 255, 255, 255),
 	aa_mode = { ui_new_combobox('AA', 'Anti-aimbot angles', 'Mode', 'Safe', 'Maximum') },
 	aa_mode_v2 = ui_new_combobox('AA', 'Anti-aimbot angles', 'Exploits', { 'Off', 'Fake twist', 'Fake jitter', 'Fake max', 'Cradle', 'Shake' } ),
-	auto_off = { ui_new_multiselect('AA', 'Anti-aimbot angles', 'Auto-Off', 'Show sliders', 'FPS', 'Ping', 'Speed', 'Loss', 'Choke') },
+	auto_off = { ui_new_multiselect('AA', 'Anti-aimbot angles', 'Auto-Off', 'Show sliders', 'FPS', 'Ping', 'Speed', 'Loss', 'Choke', 'Tabbed out') },
 	fps_slider = ui_new_slider('AA', 'Anti-aimbot angles', 'FPS threshold', 59, 300, 59, true, '', 1, FpsTable()),
 	ping_slider = ui_new_slider('AA', 'Anti-aimbot angles', 'Ping threshold', 0, 150, 75, true, 'ms'),
 	speed_slider = ui_new_slider('AA', 'Anti-aimbot angles', 'Speed threshold', 0, 250, 135, true, 'u'),
@@ -498,6 +498,7 @@ local function on_paint(ctx)
 	local indicator_baim = table_contains(ui_get(semirage.indicators_mode[1]), 'Force body aim')
 	local indicator_safe = table_contains(ui_get(semirage.indicators_mode[1]), 'Force safe point')
 	local indicator_override = table_contains(ui_get(semirage.indicators_mode[1]), 'Override')
+	local tabbed_out = table_contains(ui_get(legitaa.auto_off[1]), 'Tabbed out')
 
 	if enabled then
 		renderer_indicator(r, g, b, a, 'FOV: ', fov, '°')
@@ -541,6 +542,10 @@ local function on_paint(ctx)
 	else
 		ui_set(rage.ragebot[2], 'On hotkey')
 		ui_set(rage.fire, false)
+	end
+
+	if tabbed_out then
+		client.exec('engine_no_focus_sleep 0')
 	end
 
 end
