@@ -4,9 +4,9 @@ local client_camera_angles, client_color_log, client_create_interface, client_de
 
 ---[ Vars ]---
 client_color_log(180, 238, 0, '---[ Info ]---')
-client_color_log(255, 255, 255, 'Last update: 29 July 2020')
+client_color_log(255, 255, 255, 'Last update: 07 August 2020')
 client_color_log(255, 255, 255, 'If you have a problem post a message on the forum.')
-client_color_log(255, 255, 255, 'Last change: Change the name of the lua, Added Auto-Off Tabbed out.')
+client_color_log(255, 255, 255, 'Last change: Disable the AA, and display back the hidden features when you unload the lua.')
 client_color_log(180, 238, 0, '--------------')
 
 local ffi = require('ffi')
@@ -1262,3 +1262,36 @@ client_set_event_callback('setup_command', function(cmd)
 	end
 end)
 ---------------------
+
+client_set_event_callback('shutdown', function()
+	if ui_get(semirage.hide_useless_features) then
+		ui_set_visible(useless.pitch[1], true)
+		ui_set_visible(useless.yaw_base[1], true)
+		ui_set_visible(useless.yaw[1], true)
+		ui_set_visible(useless.yaw[2], true)
+		ui_set_visible(useless.edge_yaw, true)
+		ui_set_visible(useless.fs[1], true)
+		ui_set_visible(useless.fs[2], true)
+		ui_set_visible(useless.onshot_aa[1], true)
+		ui_set_visible(useless.onshot_aa[2], true)
+		ui_set_visible(useless.fake_peek[1], true)
+		ui_set_visible(useless.fake_peek[2], true)
+		ui_set_visible(useless.double_tap[1], true)
+		ui_set_visible(useless.double_tap[2], true)
+		ui_set_visible(useless.fake_yaw_limit[1], true)
+	end
+
+	if ui_get(aa.antiaim[1]) then
+		ui_set(aa.antiaim[1], false)
+		ui_set(aa.pitch[1], 'Off')
+		ui_set(aa.yaw_base[1], 'Local view')
+		ui_set(aa.yaw[1], 'Off')
+		ui_set(aa.yaw_jitter[1], 'Off')
+		ui_set(aa.body_yaw[1], 'Off')
+		ui_set(aa.fs_body_yaw, false)
+		ui_set(aa.body_yaw_target[1], 'Off')
+		ui_set(aa.edge_yaw, false)
+		ui_set(aa.fake_yaw_limit[1], 0)
+		ui_set(aa.fs[1], '-')
+	end
+end)
