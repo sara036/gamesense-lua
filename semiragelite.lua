@@ -3,10 +3,15 @@ local client_camera_angles, client_color_log, client_create_interface, client_de
 -------------
 
 ---[ Vars ]---
+local js = panorama.open()
+local api = js.MyPersonaAPI
+local name = api.GetName()
+
 client_color_log(180, 238, 0, '---[ Info ]---')
-client_color_log(255, 255, 255, 'Last update: 07 August 2020')
+client_color_log(255, 255, 255, 'Welcome back ' .. name .. '!')
+client_color_log(255, 255, 255, 'Last update: 09 August 2020')
 client_color_log(255, 255, 255, 'If you have a problem post a message on the forum.')
-client_color_log(255, 255, 255, 'Last change: Disable the AA, and display back the hidden features when you unload the lua.')
+client_color_log(255, 255, 255, 'Last change: Added Welcome back message useless lol.')
 client_color_log(180, 238, 0, '--------------')
 
 local ffi = require('ffi')
