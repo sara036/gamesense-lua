@@ -9,9 +9,9 @@ local name = api.GetName()
 
 client_color_log(180, 238, 0, '---[ Info ]---')
 client_color_log(255, 255, 255, 'Welcome back ' .. name .. '!')
-client_color_log(255, 255, 255, 'Last update: 09 August 2020')
+client_color_log(255, 255, 255, 'Last update: 10 August 2020')
 client_color_log(255, 255, 255, 'If you have a problem post a message on the forum.')
-client_color_log(255, 255, 255, 'Last change: Added Welcome back message useless lol.')
+client_color_log(255, 255, 255, 'Last change: Moved indicator FOV.')
 client_color_log(180, 238, 0, '--------------')
 
 local ffi = require('ffi')
@@ -88,7 +88,7 @@ local function can_see(ent)
     for i = 0, 18 do
         if client_visible(entity_hitbox_position(ent, i)) then
             return true
-        end
+		end
     end
     return false
 end
@@ -186,13 +186,13 @@ local semirage = {
 	dynamicfov_min = ui_new_slider('RAGE', 'Other', 'Minimal FOV', 1, 180, 3, true, '°', 1),
 	dynamicfov_max = ui_new_slider('RAGE', 'Other', 'Maximum FOV', 1, 180, 6, true, '°', 1),
 	dynamicfov_auto_factor = ui_new_slider('RAGE', 'Other', 'Automatic Factor', 0, 250, 30, true, 'x', 0.01),
-	dynamicfov_indicators1 = { ui_new_combobox('RAGE', 'Other', '\nIndicators1', 'Off', 'Circle', 'Outline') },
-	dynamicfov_colors1 = ui_new_color_picker('RAGE', 'Other', '\nIndicators1', 123, 194, 21, 50),
-	dynamicfov_indicators2 = { ui_new_combobox('RAGE', 'Other', '\nIndicators2', 'Off', 'Change circle color', 'Draw hitboxes') },
-	dynamicfov_colors2 = ui_new_color_picker('RAGE', 'Other', '\nIndicators2', 194, 20, 20, 50),
 	indicators = ui_new_checkbox('RAGE', 'Other', 'Indicators'),
-	indicators_mode = { ui_new_multiselect('RAGE', 'Other', '\nIndicators', 'Automatic fire', 'Automatic penetration', 'Force body aim', 'Force safe point', 'Override') },
+	indicators_mode = { ui_new_multiselect('RAGE', 'Other', '\nIndicators', 'Automatic fire', 'Automatic penetration', 'Force body aim', 'Force safe point', 'Override', 'FOV') },
 	indicators_color = ui_new_color_picker('RAGE', 'Other', '\nIndicators', 123, 194, 21, 255),
+	indicators_fov = { ui_new_combobox('RAGE', 'Other', '\nIndicators1', 'Off', 'Circle', 'Outline') },
+	indicators_colors1 = ui_new_color_picker('RAGE', 'Other', '\nIndicators1', 123, 194, 21, 50),
+	indicators_fov2 = { ui_new_combobox('RAGE', 'Other', '\nIndicators2', 'Off', 'Change circle color', 'Draw hitboxes') },
+	indicators_colors2 = ui_new_color_picker('RAGE', 'Other', '\nIndicators2', 194, 20, 20, 50),
 	advanced_logs = ui_new_checkbox('RAGE', 'Other', 'Advanced logs'),
 	logs_mode = { ui_new_multiselect('RAGE', 'Other', '\nAdvanced logs', 'Fire', 'Hit', 'Miss')},
 	hide_useless_features = ui_new_checkbox('RAGE', 'Other', 'Hide useless features'),
@@ -222,9 +222,9 @@ local spam = ui_new_button('MISC', 'Miscellaneous', 'Get Good Get GameSense', fu
 	local name = vars.name_player
 	ui_set(misc.namesteal, true)
 	client_set_cvar('name', name)
-	setName(0.1, 'Get') 
-	setName(0.2, 'Get Good')
-	setName(0.3, 'Get Good Get')
+	setName(0.1, 'Get Good Get GameSense') 
+	setName(0.2, 'Get Good Get GameSense')
+	setName(0.3, 'Get Good Get GameSense')
 	setName(0.4, 'Get Good Get GameSense')
 	setName(0.5, name)
 end)
@@ -243,9 +243,8 @@ local function visibility()
 	local dynamic_off = (ui_get(semirage.dynamicfov_mode[1]) == 'Off')
 	local dynamic_static = (ui_get(semirage.dynamicfov_mode[1]) == 'Static')
 	local dynamic_auto = (ui_get(semirage.dynamicfov_mode[1]) == 'Auto')
-	local dynamic_indicators1 = (ui_get(semirage.dynamicfov_indicators1[1]) == 'Off')
-	local dynamic_indicators2 = (ui_get(semirage.dynamicfov_indicators2[1]) == 'Off')
 	local indicators = ui_get(semirage.indicators)
+	local indicator_fov = table_contains(ui_get(semirage.indicators_mode[1]), 'FOV')
 	local logs = ui_get(semirage.advanced_logs)
 	local logs_hit = table_contains(ui_get(semirage.logs_mode[1]), 'Hit')
 	local logs_miss = table_contains(ui_get(semirage.logs_mode[1]), 'Miss')
@@ -260,7 +259,7 @@ local function visibility()
 	local aa_choke = table_contains(ui_get(legitaa.auto_off[1]), 'Choke')
 	local hide_useless = ui_get(semirage.hide_useless_features)
 
-	if lite == true then
+	if lite then
 		ui_set_visible(semirage.fire, true)
 		ui_set_visible(semirage.penetration, true)
 		ui_set_visible(semirage.dynamicfov, true)
@@ -318,8 +317,6 @@ local function visibility()
 	else
 		ui_set(semirage.dynamicfov_mode[1], 'OFf')
 		ui_set_visible(semirage.dynamicfov_mode[1], false)
-		ui_set(semirage.dynamicfov_indicators1[1], 'Off')
-		ui_set(semirage.dynamicfov_indicators2[1], 'Off')
 	end
 
 	if penetration_onhotkey then
@@ -341,8 +338,6 @@ local function visibility()
 		ui_set_visible(semirage.dynamicfov_max, false)
 		ui_set_visible(semirage.dynamicfov_auto_factor, false)
 		ui_set_visible(semirage.dynamicfov_restrict, false)
-		ui_set_visible(semirage.dynamicfov_indicators1[1], false)
-		ui_set_visible(semirage.dynamicfov_indicators2[1], false)
 	end
 
 	if dynamic_static then
@@ -350,8 +345,6 @@ local function visibility()
 		ui_set_visible(semirage.dynamicfov_max, true)
 		ui_set_visible(semirage.dynamicfov_auto_factor, false)
 		ui_set_visible(semirage.dynamicfov_restrict, true)
-		ui_set_visible(semirage.dynamicfov_indicators1[1], true)
-		ui_set_visible(semirage.dynamicfov_indicators2[1], true)
 	end
 
 	if dynamic_auto then
@@ -359,20 +352,18 @@ local function visibility()
 		ui_set_visible(semirage.dynamicfov_max, true)
 		ui_set_visible(semirage.dynamicfov_auto_factor, true)
 		ui_set_visible(semirage.dynamicfov_restrict, true)
-		ui_set_visible(semirage.dynamicfov_indicators1[1], true)
-		ui_set_visible(semirage.dynamicfov_indicators2[1], true)
 	end
 
-	if dynamic_indicators1 then
-		ui_set_visible(semirage.dynamicfov_colors1, false)
+	if indicator_fov then
+		ui_set_visible(semirage.indicators_fov[1], true)
+		ui_set_visible(semirage.indicators_colors1, true)
+		ui_set_visible(semirage.indicators_fov2[1], true)
+		ui_set_visible(semirage.indicators_colors2, true)
 	else
-		ui_set_visible(semirage.dynamicfov_colors1, true)
-	end
-
-	if dynamic_indicators2 then
-		ui_set_visible(semirage.dynamicfov_colors2, false)
-	else
-		ui_set_visible(semirage.dynamicfov_colors2, true)
+		ui_set_visible(semirage.indicators_fov[1], false)
+		ui_set_visible(semirage.indicators_colors1, false)
+		ui_set_visible(semirage.indicators_fov2[1], false)
+		ui_set_visible(semirage.indicators_colors2, false)
 	end
 
 	if indicators then
@@ -381,6 +372,13 @@ local function visibility()
 	else
 		ui_set_visible(semirage.indicators_mode[1], false)
 		ui_set_visible(semirage.indicators_color, false)
+		ui_set(semirage.indicators_mode[1], '-')
+		ui_set(semirage.indicators_fov[1], 'Off')
+		ui_set(semirage.indicators_fov2[1], 'Off')
+		ui_set_visible(semirage.indicators_fov[1], false)
+		ui_set_visible(semirage.indicators_colors1, false)
+		ui_set_visible(semirage.indicators_fov2[1], false)
+		ui_set_visible(semirage.indicators_colors2, false)
 	end
 
 	if logs then
@@ -646,11 +644,11 @@ local function DynamicFOV_drawing()
 	local mode = ui_get(semirage.dynamicfov_mode[1])
 
 	if mode ~= 'Off' then
-		local indicators_mode = ui_get(semirage.dynamicfov_indicators1[1])
-		local indicators_in_fov = ui_get(semirage.dynamicfov_indicators2[1])
+		local indicators_mode = ui_get(semirage.indicators_fov[1])
+		local indicators_in_fov = ui_get(semirage.indicators_fov2[1])
 
-		local r, g, b, a = ui_get(semirage.dynamicfov_colors1)
-		local r2, g2, b2, a2 = ui_get(semirage.dynamicfov_colors2)
+		local r, g, b, a = ui_get(semirage.indicators_colors1)
+		local r2, g2, b2, a2 = ui_get(semirage.indicators_colors2)
 
 		if indicators_mode ~= 'Off' then
 
