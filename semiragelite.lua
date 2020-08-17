@@ -1,51 +1,67 @@
----[ API ]---
-local client_camera_angles, client_color_log, client_create_interface, client_delay_call, client_draw_hitboxes, client_eye_position, client_find_signature, client_get_cvar, client_latency, client_log, client_screen_size, client_set_cvar, client_set_event_callback, client_update_player_list, client_userid_to_entindex, client_visible, entity_get_classname, entity_get_local_player, entity_get_player_name, entity_get_player_weapon, entity_get_players, entity_get_prop, entity_hitbox_position, globals_absoluteframetime, globals_realtime, globals_tickinterval, math_abs, math_atan2, math_floor, math_pow, math_sqrt, renderer_circle, renderer_circle_outline, renderer_indicator, renderer_text, renderer_world_to_screen, require, string_format, string_match, table_concat, table_insert, table_remove, ui_get, ui_new_button, ui_new_checkbox, ui_new_color_picker, ui_new_combobox, ui_new_hotkey, ui_new_multiselect, ui_new_slider, ui_reference, ui_set, ui_set_callback, ui_set_visible, error, pairs = client.camera_angles, client.color_log, client.create_interface, client.delay_call, client.draw_hitboxes, client.eye_position, client.find_signature, client.get_cvar, client.latency, client.log, client.screen_size, client.set_cvar, client.set_event_callback, client.update_player_list, client.userid_to_entindex, client.visible, entity.get_classname, entity.get_local_player, entity.get_player_name, entity.get_player_weapon, entity.get_players, entity.get_prop, entity.hitbox_position, globals.absoluteframetime, globals.realtime, globals.tickinterval, math.abs, math.atan2, math.floor, math.pow, math.sqrt, renderer.circle, renderer.circle_outline, renderer.indicator, renderer.text, renderer.world_to_screen, require, string.format, string.match, table.concat, table.insert, table.remove, ui.get, ui.new_button, ui.new_checkbox, ui.new_color_picker, ui.new_combobox, ui.new_hotkey, ui.new_multiselect, ui.new_slider, ui.reference, ui.set, ui.set_callback, ui.set_visible, error, pairs
--------------
-
----[ Vars ]---
 local js = panorama.open()
 local api = js.MyPersonaAPI
 local name = api.GetName()
 
-client_color_log(180, 238, 0, '---[ Info ]---')
-client_color_log(255, 255, 255, 'Welcome back ' .. name .. '!')
-client_color_log(255, 255, 255, 'Last update: 10 August 2020')
-client_color_log(255, 255, 255, 'If you have a problem post a message on the forum.')
-client_color_log(255, 255, 255, 'Last change: Moved indicator FOV.')
-client_color_log(180, 238, 0, '--------------')
+client.color_log(180, 238, 0, '---[ SEMIRAGE ]---')
+client.color_log(255, 255, 255, 'Welcome back ' .. name .. '!')
+client.color_log(255, 255, 255, 'Last update: In developpement.')
+client.color_log(180, 238, 0, '------------------')
 
 local ffi = require('ffi')
 
+ffi.cdef [[
+    typedef bool(__thiscall* lgts)(float, float, float, float, float, float, short);
+    typedef void***(__thiscall* FindHudElement_t)(void*, const char*); 
+	typedef void(__cdecl* ChatPrintf_t)(void*, int, int, const char*, ...); 
+]]
+
+local signature = '\x55\x8B\xEC\x83\xEC\x08\x8B\x15\xCC\xCC\xCC\xCC\x0F\x57'
+local signature_gHud = '\xB9\xCC\xCC\xCC\xCC\x88\x46\x09'
+local signature_FindElement = '\x55\x8B\xEC\x53\x8B\x5D\x08\x56\x57\x8B\xF9\x33\xF6\x39\x77\x28'
+local match = client.find_signature('client.dll', signature) or error('client_find_signature fucked up')
+local line_goes_through_smoke = ffi.cast('lgts', match) or error('ffi.cast fucked up')
+local match = client.find_signature('client.dll', signature_gHud) or error('signature not found')
+local hud = ffi.cast('void**', ffi.cast('char*', match) + 1)[0] or error('hud is nil')
+local helement_match = client.find_signature('client.dll', signature_FindElement) or error('FindHudElement not found')
+local hudchat = ffi.cast('FindHudElement_t', helement_match)(hud, 'CHudChat') or error('CHudChat not found')
+local chudchat_vtbl = hudchat[0] or error('CHudChat instance vtable is nil')
+local print_to_chat = ffi.cast('ChatPrintf_t', chudchat_vtbl[27])
+
+local function print_chat(text)
+    print_to_chat(hudchat, 0, 0, text)
+end
+
 local vars = {
-	name_player = nil,
-	dynamicfov_new = 0,
-	bool_in_fov = false,
-	closest_enemy = nil,
-	visible = false,
-	fire = false,
-	penetration_shotme = false,
-	cached_target,
-	oldcfg = nil,
-	legitaa_check = false,
-	legitaa_value1 = false,
-	legitaa_value2 = false,
-	legitaa_show_slider = false,
-	legitaa_fps_slider = false,
-	legitaa_ping_slider = false,
-	legitaa_speed_slider = false,
-	legitaa_loss_slider = false,
-	legitaa_choke_slider = false,
-	legitaa_stop1 = false,
-	legitaa_stop2 = false,
-	legitaa_stop3 = false,
-	legitaa_stop4 = false,
-	legitaa_stop5 = false,
-	legitaa_updates = 0,
-	legitaa_target = 0,
+    rage = {
+        fire = false,
+        penetration = false,
+        penetration2 = false,
+        autofactor = nil,
+        max_fov = nil,
+        min_fov = nil,
+        dynamicfov_new_fov = 0,
+        bool_in_fov = false,
+        closest_enemy = nil,
+        visible_hitboxes = 0,
+        nearest_player = nil,
+        nearest_player_fov = nil
+    },
+
+    misc = {
+        name = false
+    },
 }
 
+local w, h = client.screen_size()
+local x, y = w / 2, h / 2
+local angle = 0
+local bruteforce_manual
+PI = 3.14159265358979323846
+DEG_TO_RAD = PI / 180.0
+RAD_TO_DEG = 180.0 / PI
+
 local weapon_classes = {
-	['CWeaponG3SG1'] = 'Snipers',
+    ['CWeaponG3SG1'] = 'Snipers',
 	['CWeaponSCAR20'] = 'Snipers',
 	['CWeaponAWP'] = 'Snipers',
 	['CWeaponSSG08'] = 'Snipers',
@@ -56,1245 +72,771 @@ local weapon_classes = {
 	['CWeaponGlock'] = 'Pistols',
 	['CWeaponElite'] = 'Pistols',
 	['CWeaponTec9'] = 'Pistols',
-	['CAK47'] = 'Rifles',
-	['CWeaponAug'] = 'Rifles',
-	['CWeaponFamas'] = 'Rifles',
-	['CWeaponGalilAR'] = 'Rifles',
-	['CWeaponM4A1'] = 'Rifles',
-	['CWeaponSG556'] = 'Rifles',
-	['CWeaponMP7'] = 'SMG',
-	['CWeaponMP9'] = 'SMG',
-	['CWeaponBizon'] = 'SMG',
-	['CWeaponP90'] = 'SMG',
-	['CWeaponUMP45'] = 'SMG',
-	['CWeaponM249'] = 'Machine gun',
-	['CWeaponNegev'] = 'Machine gun',
-	['CWeaponMag7'] = 'Shotgun',
-	['CWeaponNOVA'] = 'Shotgun',
-	['CWeaponSawedoff'] = 'Shotgun',
-	['CWeaponXM1014'] = 'Shotgun',
+	['CAK47'] = 'Others',
+	['CWeaponAug'] = 'Others',
+	['CWeaponFamas'] = 'Others',
+	['CWeaponGalilAR'] = 'Others',
+	['CWeaponM4A1'] = 'Others',
+	['CWeaponSG556'] = 'Others',
+	['CWeaponMP7'] = 'Others',
+	['CWeaponMP9'] = 'Others',
+	['CWeaponBizon'] = 'Others',
+	['CWeaponP90'] = 'Others',
+	['CWeaponUMP45'] = 'Others',
+	['CWeaponM249'] = 'Others',
+	['CWeaponNegev'] = 'Others',
+	['CWeaponMag7'] = 'Others',
+	['CWeaponNOVA'] = 'Others',
+	['CWeaponSawedoff'] = 'Others',
+	['CWeaponXM1014'] = 'Others',
+}
+
+local improvements_modes = {
+    'Snipers',
+    'Deagle', 
+    'Pistols',
+    'Others'
+}
+
+local improvements_nades = {
+    'Smoke',
+    'Flash'
+}
+
+local dynamicfov_modes = {
+    'Snipers',
+    'Deagle', 
+    'Pistols',
+    'Others'
+}
+
+local penetration_modes = {
+    'On hotkey',
+    'Visible'
+}
+
+local indicators_types = {
+    'Default',
+    'Crosshair'
+}
+
+local indicators_modes = {
+    'Resolver',
+    'FOV',
+    'FAKE',
+    'Automatic fire',
+    'Automatic penetration',
+    'Force body aim',
+    'Minimum damage'
+}
+
+local flags_modes = {
+    'FAKE',
+    'Resolver'
+}
+
+local references = {
+    rage = {
+        enabled = { ui.reference('RAGE', 'Aimbot', 'Enabled') },
+        fire = ui.reference('RAGE', 'Aimbot', 'Automatic fire'),
+        penetration = ui.reference('RAGE', 'Aimbot', 'Automatic penetration'),
+        mindmg = ui.reference('RAGE', 'Aimbot', 'Minimum damage'),
+        fov = ui.reference('RAGE', 'Aimbot', 'Maximum FOV'),
+        bodyaim = ui.reference('RAGE', 'Other', 'Force body aim'),
+        miss = ui.reference('RAGE', 'Aimbot', 'Log misses due to spread'),
+    },
+
+    aa = {
+        enabled = { ui.reference('AA', 'Anti-aimbot angles', 'Enabled') },
+    },
+
+    misc = {
+        namesteal = ui.reference('MISC', 'Miscellaneous', 'Steal player name'),
+    },
+
+    players = {
+        body_yaw = ui.reference('PLAYERS', 'Adjustments', 'Force body yaw'),
+        body_yaw_slider = { ui.reference('PLAYERS', 'Adjustments', 'Force body yaw value') },
+        lists = ui.reference('PLAYERS', 'Players', 'Player list'),
+	    whitelist = ui.reference('PLAYERS', 'Adjustments', 'Add to whitelist'),
+        reset_all = ui.reference('PLAYERS', 'Players', 'Reset all'),
+        apply_all = ui.reference('PLAYERS', 'Adjustments', 'Apply to all'),
+    },
+}
+
+local menu = {
+    rage = {
+        enabled = ui.new_checkbox('RAGE', 'Other', 'SEMI RAGE'),
+        improvements = ui.new_checkbox('RAGE', 'Other', 'Improvements'),
+        improvements_mode = { ui.new_multiselect('RAGE', 'Other', 'Aimbot improvements', improvements_modes) },
+        improvements_hotkey = ui.new_hotkey('RAGE', 'Other', '\nAimbot improvements modes', true, 0x01),
+        improvements_nades = { ui.new_multiselect('RAGE', 'Other', 'Disable aimbot', improvements_nades) },
+        fire = ui.new_checkbox('RAGE', 'Other', 'Automatic fire'),
+        fire_hotkey = ui.new_hotkey('RAGE', 'Other', 'Automatic fire', true),
+        penetration = ui.new_checkbox('RAGE', 'Other', 'Automatic penetration'),
+        penetration_hotkey = ui.new_hotkey('RAGE', 'Other', 'Automatic penetration', true),
+        penetration_mode = { ui.new_multiselect('RAGE', 'Other', '\nPenetration modes', penetration_modes) },
+        penetreation_slider = ui.new_slider('RAGE', 'Other', 'when X hitboxes visible', 0, 12, 2, true),
+        dynamicfov = ui.new_checkbox('RAGE', 'Other', 'Dynamic FOV'),
+        dynamicfov_mode = { ui.new_combobox('RAGE', 'Other', '\nDynamic FOV modes', dynamicfov_modes) },
+        dynamicfov_autofactor = ui.new_slider('RAGE', 'Other', 'Dynamic FOV auto factor', 0, 250, 100, true, 'x', 0.01),
+        dynamicfov_min_snipers = ui.new_slider('RAGE', 'Other', 'Snipers Dynamic FOV min', 1, 180, 3, true, '°', 1),
+        dynamicfov_max_snipers = ui.new_slider('RAGE', 'Other', 'Snipers Dynamic FOV max', 1, 180, 10, true, '°', 1),
+        dynamicfov_min_deagle = ui.new_slider('RAGE', 'Other', 'Deagle Dynamic FOV min', 1, 180, 3, true, '°', 1),
+        dynamicfov_max_deagle = ui.new_slider('RAGE', 'Other', 'Deagle Dynamic FOV max', 1, 180, 10, true, '°', 1),
+        dynamicfov_min_pistols = ui.new_slider('RAGE', 'Other', 'Pistols Dynamic FOV min', 1, 180, 3, true, '°', 1),
+        dynamicfov_max_pistols = ui.new_slider('RAGE', 'Other', 'Pistols Dynamic FOV max', 1, 180, 10, true, '°', 1),
+        dynamicfov_min_others = ui.new_slider('RAGE', 'Other', 'Others Dynamic FOV min', 1, 180, 3, true, '°', 1),
+        dynamicfov_max_others = ui.new_slider('RAGE', 'Other', 'Others Dynamic FOV max', 1, 180, 10, true, '°', 1),
+        resolver = ui.new_checkbox('RAGE', 'Other', 'Resolver'),
+        resolver_hotkey = ui.new_hotkey('RAGE', 'Other', '\nResolver', true),
+    },
+
+    visuals = {
+        enabled = ui.new_checkbox('VISUALS', 'Other ESP', 'SEMI VISUALS'),
+        indicators = ui.new_checkbox('VISUALS', 'Other ESP', 'Indicators'),
+        indicators_type = { ui.new_combobox('VISUALS', 'Other ESP', '\nIndicators types', indicators_types) },
+        indicators_mode = { ui.new_multiselect('VISUALS', 'Other ESP', 'Indicators modes', indicators_modes) },
+        flags = ui.new_checkbox('VISUALS', 'Other ESP', 'Flags'),
+        flags_mode = { ui.new_multiselect('VISUALS', 'Other ESP', '\nFlags modes', flags_modes) },
+    },
+
+    misc = {
+        enabled = ui.new_checkbox('MISC', 'Miscellaneous', 'SEMI MISC'),
+        logs = ui.new_checkbox('MISC', 'Miscellaneous', 'Log misses'),
+        spam = ui.new_button('MISC', 'Miscellaneous', 'GAMESENSE > ALL', function()
+            local player = entity.get_local_player()
+            if not vars.misc.name then
+                name = entity.get_player_name(player)
+                vars.misc.name = true
+            end
+            ui.set(references.misc.namesteal, true)
+            client.set_cvar('name', 'GAMESENSE > ALL')
+            client.delay_call(0.15, client.set_cvar, 'name', 'GAMESENSE > ALL')
+            client.delay_call(0.3, client.set_cvar, 'name', 'GAMESENSE > ALL')
+            client.delay_call(0.45, client.set_cvar, 'name', 'GAMESENSE > ALL')
+            client.delay_call(0.6, client.set_cvar, 'name', name)
+            if name == entity.get_player_name(player) then
+                vars.misc.name = false
+            end
+        end)
+    },
 }
 
 local function table_contains(tbl, val)
-	for i=1, #tbl do
-	  if tbl[i] == val then
-		return true
-	  end
-	end
-	return false
-end
-
-local function can_see(ent)
-    for i = 0, 18 do
-        if client_visible(entity_hitbox_position(ent, i)) then
+    for i = 1, #tbl do
+        if tbl[i] == val then
             return true
-		end
+        end
     end
     return false
 end
 
-local function FpsTable()
-	local Fps_Table = {}
-	Fps_Table[59] = 'Tickrate'
-	for i = 1, 241 do
-		Fps_Table[59+i] = 59+i .. 'fps'
-	end
-	return Fps_Table
+local function angle_to_vec(pitch, yaw)
+    local pitch_rad, yaw_rad = DEG_TO_RAD * pitch, DEG_TO_RAD * yaw
+    local sp, cp, sy, cy = math.sin(pitch_rad), math.cos(pitch_rad), math.sin(yaw_rad), math.cos(yaw_rad)
+    return cp * cy, cp * sy, -sp
 end
 
-local function setName(delay, name)
-    client_delay_call(delay, function() 
-        client_set_cvar('name', name)
-    end)
-end
---------------
-
----[ References ]---
-local rage = {
-	ragebot = { ui_reference('RAGE', 'Aimbot', 'Enabled') },
-	fire = ui_reference('RAGE', 'Aimbot', 'Automatic fire'),
-	penetration = ui_reference('RAGE', 'Aimbot', 'Automatic penetration'),
-	fov = ui_reference('RAGE', 'Aimbot', 'Maximum FOV'),
-	miss = ui_reference('RAGE', 'Aimbot', 'Log misses due to spread'),
-	force_safe_point = ui_reference('RAGE', 'Aimbot', 'Force safe point'),
-	force_body_aim = ui_reference('RAGE', 'Other', 'Force body aim'),
-	override = ui_reference('RAGE', 'Other', 'Anti-aim correction override'),
-}
-
-local aa = {
-	antiaim = { ui_reference('AA', 'Anti-aimbot angles', 'Enabled') },
-	pitch = { ui_reference('AA', 'Anti-aimbot angles', 'Pitch') },
-	yaw_base = { ui_reference('AA', 'Anti-aimbot angles', 'Yaw base') },
-	yaw = { ui_reference('AA', 'Anti-aimbot angles', 'Yaw') },
-	yaw_jitter = { ui_reference('AA', 'Anti-aimbot angles', 'Yaw jitter') },
-	body_yaw = { ui_reference('AA', 'Anti-aimbot angles', 'Body yaw') },
-	fs_body_yaw = ui_reference('AA', 'Anti-aimbot angles', 'Freestanding body yaw'),
-	body_yaw_target = { ui_reference('AA', 'Anti-aimbot angles', 'Lower body yaw target') },
-	edge_yaw = ui_reference('AA', 'Anti-aimbot angles', 'Edge yaw'),
-	fake_yaw_limit = { ui_reference('AA', 'Anti-aimbot angles', 'Fake yaw limit') },
-	fs = { ui_reference('AA', 'Anti-aimbot angles', 'Freestanding') },
-}
-
-local fl = {
-	fakelag = { ui_reference('AA', 'Fake lag', 'Enabled') },
-	limit = ui_reference('AA', 'Fake lag', 'Limit'),
-}
-
-local misc = {
-	cfg = { ui_reference('CONFIG', 'Presets', 'Presets') },
-	damage = ui_reference('MISC', 'Miscellaneous', 'Log damage dealt'),
-	namesteal = ui_reference('MISC', 'Miscellaneous', 'Steal player name'),
-}
-
-local players = {
-	lists = ui_reference('PLAYERS', 'Players', 'Player list'),
-	whitelist = ui_reference('PLAYERS', 'Adjustments', 'Add to whitelist'),
-	reset_all = ui_reference('PLAYERS', 'Players', 'Reset all'),
-}
-
-local useless = {
-	pitch = { ui_reference('AA', 'Anti-aimbot angles', 'Pitch') },
-	yaw_base = { ui_reference('AA', 'Anti-aimbot angles', 'Yaw base') },
-	yaw = { ui_reference('AA', 'Anti-aimbot angles', 'Yaw') },
-	yaw_jitter = { ui_reference('AA', 'Anti-aimbot angles', 'Yaw jitter') },
-	edge_yaw = ui_reference('AA', 'Anti-aimbot angles', 'Edge yaw'),
-	fake_yaw_limit = { ui_reference('AA', 'Anti-aimbot angles', 'Fake yaw limit') },
-	fs = { ui_reference('AA', 'Anti-aimbot angles', 'Freestanding') },
-	onshot_aa = { ui_reference('AA', 'Other', 'On shot anti-aim') },
-	fake_peek = { ui_reference('AA', 'Other', 'Fake peek') },
-	double_tap = { ui_reference('RAGE', 'Other', 'Double tap') },
-}
---------------------
-
----[ Menu ]---
-local semirage = {
-	lite = ui_new_checkbox('RAGE', 'Other', 'Semirage'),
-	improvements = ui_new_checkbox('RAGE', 'Other', 'Improvements'),
-	improvements_mode = { ui_new_multiselect('RAGE', 'Other', 'Aimbot improvements', 'Snipers', 'Deagle', 'Pistols', 'Rifles', 'SMGs', 'Machine guns', 'Shotguns') },
-	improvements_hotkey = ui_new_hotkey('RAGE', 'Other', '\nAimbot improvements', true, 0x01),
-	improvements_nades = { ui_new_multiselect('RAGE', 'Other', 'Disable aimbot', 'Smoke', 'Flash') },
-	fire = ui_new_checkbox('RAGE', 'Other', 'Automatic fire'), 
-	fire_hotkey = ui_new_hotkey('RAGE', 'Other', 'Automatic fire', true),
-	penetration = ui_new_checkbox('RAGE', 'Other', 'Automatic penetration'), 
-	penetration_hotkey = ui_new_hotkey('RAGE', 'Other', 'Automatic penetration', true),
-	penetration_mode = { ui_new_multiselect('RAGE', 'Other', '\nPenetration mode', 'On hotkey', 'Visible', 'Shot me') },
-	penetration_delay_turnson = ui_new_slider('RAGE', 'Other', 'Turns on if shot me', 0, 120, 1, true, 's'),
-	penetration_delay_stayson = ui_new_slider('RAGE', 'Other', 'Stays on if shot me', 1, 180, 50, true, 's'),
-	dynamicfov = ui_new_checkbox('RAGE', 'Other', 'Dynamic FOV'),
-	dynamicfov_mode = { ui_new_combobox('RAGE', 'Other', '\nDynamic FOV', 'Off', 'Static', 'Auto') },
-	dynamicfov_restrict = ui_new_checkbox('RAGE', 'Other', 'Restrict updates'),
-	dynamicfov_min = ui_new_slider('RAGE', 'Other', 'Minimal FOV', 1, 180, 3, true, '°', 1),
-	dynamicfov_max = ui_new_slider('RAGE', 'Other', 'Maximum FOV', 1, 180, 6, true, '°', 1),
-	dynamicfov_auto_factor = ui_new_slider('RAGE', 'Other', 'Automatic Factor', 0, 250, 30, true, 'x', 0.01),
-	indicators = ui_new_checkbox('RAGE', 'Other', 'Indicators'),
-	indicators_mode = { ui_new_multiselect('RAGE', 'Other', '\nIndicators', 'Automatic fire', 'Automatic penetration', 'Force body aim', 'Force safe point', 'Override', 'FOV') },
-	indicators_color = ui_new_color_picker('RAGE', 'Other', '\nIndicators', 123, 194, 21, 255),
-	indicators_fov = { ui_new_combobox('RAGE', 'Other', '\nIndicators1', 'Off', 'Circle', 'Outline') },
-	indicators_colors1 = ui_new_color_picker('RAGE', 'Other', '\nIndicators1', 123, 194, 21, 50),
-	indicators_fov2 = { ui_new_combobox('RAGE', 'Other', '\nIndicators2', 'Off', 'Change circle color', 'Draw hitboxes') },
-	indicators_colors2 = ui_new_color_picker('RAGE', 'Other', '\nIndicators2', 194, 20, 20, 50),
-	advanced_logs = ui_new_checkbox('RAGE', 'Other', 'Advanced logs'),
-	logs_mode = { ui_new_multiselect('RAGE', 'Other', '\nAdvanced logs', 'Fire', 'Hit', 'Miss')},
-	hide_useless_features = ui_new_checkbox('RAGE', 'Other', 'Hide useless features'),
-}
-
-local legitaa = {
-	enabled = ui_new_checkbox('AA', 'Anti-aimbot angles', 'Legit AA'),
-	legitaa_key = ui_new_hotkey('AA', 'Anti-aimbot angles', 'Legit AA', true),
-	indicators = { ui_new_multiselect('AA', 'Anti-aimbot angles', 'Indicators', 'Arrow', 'Text') },
-	indicators_color = ui_new_color_picker('AA', 'Anti-aimbot angles', 'Indicators', 76, 148, 255, 255),
-	both_arrows = ui_new_checkbox('AA', 'Anti-aimbot angles', 'Show both arrows'),
-	arrows_color = ui_new_color_picker('AA', 'Anti-aimbot angles', '\nShow both arrows', 255, 255, 255, 255),
-	aa_mode = { ui_new_combobox('AA', 'Anti-aimbot angles', 'Mode', 'Safe', 'Maximum') },
-	aa_mode_v2 = ui_new_combobox('AA', 'Anti-aimbot angles', 'Exploits', { 'Off', 'Fake twist', 'Fake jitter', 'Fake max', 'Cradle', 'Shake' } ),
-	auto_off = { ui_new_multiselect('AA', 'Anti-aimbot angles', 'Auto-Off', 'Show sliders', 'FPS', 'Ping', 'Speed', 'Loss', 'Choke', 'Tabbed out') },
-	fps_slider = ui_new_slider('AA', 'Anti-aimbot angles', 'FPS threshold', 59, 300, 59, true, '', 1, FpsTable()),
-	ping_slider = ui_new_slider('AA', 'Anti-aimbot angles', 'Ping threshold', 0, 150, 75, true, 'ms'),
-	speed_slider = ui_new_slider('AA', 'Anti-aimbot angles', 'Speed threshold', 0, 250, 135, true, 'u'),
-	loss_slider = ui_new_slider('AA', 'Anti-aimbot angles', 'Loss threshold', 0, 10, 1, true, '%'),
-	choke_slider = ui_new_slider('AA', 'Anti-aimbot angles', 'Choke threshold', 0, 10, 1, true, '%'),
-}
-
-local spam = ui_new_button('MISC', 'Miscellaneous', 'Get Good Get GameSense', function()
-	local player = entity_get_local_player()
-	local player_name = entity_get_player_name(player)
-	vars.name_player = player_name
-	local name = vars.name_player
-	ui_set(misc.namesteal, true)
-	client_set_cvar('name', name)
-	setName(0.1, 'Get Good Get GameSense') 
-	setName(0.2, 'Get Good Get GameSense')
-	setName(0.3, 'Get Good Get GameSense')
-	setName(0.4, 'Get Good Get GameSense')
-	setName(0.5, name)
-end)
---------------
-
----[ Function #1 ]---
-local function visibility()
-
-	local lite = ui_get(semirage.lite)
-	local improvements = ui_get(semirage.improvements)
-	local fire = ui_get(semirage.fire)
-	local penetration = ui_get(semirage.penetration)
-	local penetration_onhotkey = table_contains(ui_get(semirage.penetration_mode[1]), 'On hotkey')
-	local penetration_shotme = table_contains(ui_get(semirage.penetration_mode[1]), 'Shot me')
-	local dynamicfov = ui_get(semirage.dynamicfov)
-	local dynamic_off = (ui_get(semirage.dynamicfov_mode[1]) == 'Off')
-	local dynamic_static = (ui_get(semirage.dynamicfov_mode[1]) == 'Static')
-	local dynamic_auto = (ui_get(semirage.dynamicfov_mode[1]) == 'Auto')
-	local indicators = ui_get(semirage.indicators)
-	local indicator_fov = table_contains(ui_get(semirage.indicators_mode[1]), 'FOV')
-	local logs = ui_get(semirage.advanced_logs)
-	local logs_hit = table_contains(ui_get(semirage.logs_mode[1]), 'Hit')
-	local logs_miss = table_contains(ui_get(semirage.logs_mode[1]), 'Miss')
-	local aa = ui_get(legitaa.enabled)
-	local aa_indicators = table_contains(ui_get(legitaa.indicators[1]), 'Arrow') or table_contains(ui_get(legitaa.indicators[1]), 'Text')
-	local aa_indicators_arrow = table_contains(ui_get(legitaa.indicators[1]), 'Arrow')
-	local aa_sliders = table_contains(ui_get(legitaa.auto_off[1]), 'Show sliders')
-	local aa_fps = table_contains(ui_get(legitaa.auto_off[1]), 'FPS')
-	local aa_ping = table_contains(ui_get(legitaa.auto_off[1]), 'Ping')
-	local aa_speed = table_contains(ui_get(legitaa.auto_off[1]), 'Speed')
-	local aa_loss = table_contains(ui_get(legitaa.auto_off[1]), 'Loss')
-	local aa_choke = table_contains(ui_get(legitaa.auto_off[1]), 'Choke')
-	local hide_useless = ui_get(semirage.hide_useless_features)
-
-	if lite then
-		ui_set_visible(semirage.fire, true)
-		ui_set_visible(semirage.penetration, true)
-		ui_set_visible(semirage.dynamicfov, true)
-		ui_set_visible(semirage.indicators, true)
-		ui_set_visible(semirage.hide_useless_features, true)
-		ui_set_visible(semirage.advanced_logs, true)
-		ui_set_visible(semirage.improvements, true)
-		ui_set_visible(legitaa.enabled, true)
-		ui_set_visible(spam, true)
-	else
-		ui_set(semirage.fire, false)
-		ui_set_visible(semirage.fire, false)
-		ui_set(semirage.penetration, false)
-		ui_set_visible(semirage.penetration, false)
-		ui_set(semirage.dynamicfov, false)
-		ui_set_visible(semirage.dynamicfov, false)
-		ui_set(semirage.indicators, false)
-		ui_set_visible(semirage.indicators, false)
-		ui_set(semirage.hide_useless_features, false)
-		ui_set_visible(semirage.hide_useless_features, false)
-		ui_set(semirage.advanced_logs, false)
-		ui_set_visible(semirage.advanced_logs, false)
-		ui_set(semirage.improvements, false)
-		ui_set_visible(semirage.improvements, false)
-		ui_set(legitaa.enabled, false)
-		ui_set_visible(legitaa.enabled, false)
-		ui_set_visible(spam, false)
-	end
-
-	if improvements then
-		ui_set_visible(semirage.improvements_mode[1], true)
-		ui_set_visible(semirage.improvements_hotkey, true)
-		ui_set_visible(semirage.improvements_nades[1], true)
-	else
-		ui_set_visible(semirage.improvements_mode[1], false)
-		ui_set_visible(semirage.improvements_hotkey, false)
-		ui_set_visible(semirage.improvements_nades[1], false)
-	end
-	
-	if fire then
-		ui_set_visible(semirage.fire_hotkey, true)
-	else
-		ui_set_visible(semirage.fire_hotkey, false)
-	end
-	
-	if penetration then
-		ui_set_visible(semirage.penetration_mode[1], true)
-	else
-		ui_set(semirage.penetration_mode[1], '-')
-		ui_set_visible(semirage.penetration_mode[1], false)
-	end
-
-	if dynamicfov then
-		ui_set_visible(semirage.dynamicfov_mode[1], true)
-	else
-		ui_set(semirage.dynamicfov_mode[1], 'OFf')
-		ui_set_visible(semirage.dynamicfov_mode[1], false)
-	end
-
-	if penetration_onhotkey then
-		ui_set_visible(semirage.penetration_hotkey, true)
-	else
-		ui_set_visible(semirage.penetration_hotkey, false)
-	end
-
-	if penetration_shotme then
-		ui_set_visible(semirage.penetration_delay_stayson, true)
-		ui_set_visible(semirage.penetration_delay_turnson, true)
-	else
-		ui_set_visible(semirage.penetration_delay_stayson, false)
-		ui_set_visible(semirage.penetration_delay_turnson, false)
-	end
-
-	if dynamic_off then
-		ui_set_visible(semirage.dynamicfov_min, false)
-		ui_set_visible(semirage.dynamicfov_max, false)
-		ui_set_visible(semirage.dynamicfov_auto_factor, false)
-		ui_set_visible(semirage.dynamicfov_restrict, false)
-	end
-
-	if dynamic_static then
-		ui_set_visible(semirage.dynamicfov_min, true)
-		ui_set_visible(semirage.dynamicfov_max, true)
-		ui_set_visible(semirage.dynamicfov_auto_factor, false)
-		ui_set_visible(semirage.dynamicfov_restrict, true)
-	end
-
-	if dynamic_auto then
-		ui_set_visible(semirage.dynamicfov_min, true)
-		ui_set_visible(semirage.dynamicfov_max, true)
-		ui_set_visible(semirage.dynamicfov_auto_factor, true)
-		ui_set_visible(semirage.dynamicfov_restrict, true)
-	end
-
-	if indicator_fov then
-		ui_set_visible(semirage.indicators_fov[1], true)
-		ui_set_visible(semirage.indicators_colors1, true)
-		ui_set_visible(semirage.indicators_fov2[1], true)
-		ui_set_visible(semirage.indicators_colors2, true)
-	else
-		ui_set_visible(semirage.indicators_fov[1], false)
-		ui_set_visible(semirage.indicators_colors1, false)
-		ui_set_visible(semirage.indicators_fov2[1], false)
-		ui_set_visible(semirage.indicators_colors2, false)
-	end
-
-	if indicators then
-		ui_set_visible(semirage.indicators_mode[1], true)
-		ui_set_visible(semirage.indicators_color, true)
-	else
-		ui_set_visible(semirage.indicators_mode[1], false)
-		ui_set_visible(semirage.indicators_color, false)
-		ui_set(semirage.indicators_mode[1], '-')
-		ui_set(semirage.indicators_fov[1], 'Off')
-		ui_set(semirage.indicators_fov2[1], 'Off')
-		ui_set_visible(semirage.indicators_fov[1], false)
-		ui_set_visible(semirage.indicators_colors1, false)
-		ui_set_visible(semirage.indicators_fov2[1], false)
-		ui_set_visible(semirage.indicators_colors2, false)
-	end
-
-	if logs then
-		ui_set_visible(semirage.logs_mode[1], true)
-	else
-		ui_set(semirage.logs_mode[1], '-')
-		ui_set_visible(semirage.logs_mode[1], false)
-	end
-
-	if logs_hit then
-		ui_set(misc.damage, false)
-		ui_set_visible(misc.damage, false)
-	else
-		ui_set_visible(misc.damage, true)
-	end
-
-	if logs_miss then
-		ui_set(rage.miss, false)
-		ui_set_visible(rage.miss, false)
-	else
-		ui_set_visible(rage.miss, true)
-	end
-
-	if aa then
-		ui_set_visible(legitaa.legitaa_key, true)
-		ui_set(legitaa.legitaa_key, 'Toggle')
-		ui_set_visible(legitaa.indicators[1], true)
-		ui_set_visible(legitaa.aa_mode[1], true)
-		ui_set_visible(legitaa.auto_off[1], true)
-		ui_set_visible(legitaa.aa_mode_v2, true)
-	else
-		ui_set_visible(legitaa.legitaa_key, false)
-		ui_set_visible(legitaa.indicators[1], false)
-		ui_set_visible(legitaa.aa_mode[1], false)
-		ui_set_visible(legitaa.auto_off[1], false)
-		ui_set_visible(legitaa.aa_mode_v2, false)
-	end
-
-	if aa_indicators then
-		ui_set_visible(legitaa.indicators_color, true)
-	else
-		ui_set_visible(legitaa.indicators_color, false)
-	end
-
-	if aa_indicators_arrow then
-		ui_set_visible(legitaa.both_arrows, true)
-		ui_set_visible(legitaa.arrows_color, true)
-	else
-		ui_set_visible(legitaa.both_arrows, false)
-		ui_set_visible(legitaa.arrows_color, false)
-	end
-
-	if aa_sliders then
-		ui_set_visible(legitaa.fps_slider, aa_fps)
-		ui_set_visible(legitaa.ping_slider, aa_ping)
-		ui_set_visible(legitaa.speed_slider, aa_speed)
-		ui_set_visible(legitaa.loss_slider, aa_loss)
-		ui_set_visible(legitaa.choke_slider, aa_choke)
-	else
-		ui_set_visible(legitaa.fps_slider, false)
-		ui_set_visible(legitaa.ping_slider, false)
-		ui_set_visible(legitaa.speed_slider, false)
-		ui_set_visible(legitaa.loss_slider, false)
-		ui_set_visible(legitaa.choke_slider, false)
-	end
-
-	if hide_useless then
-		ui_set_visible(useless.pitch[1], false)
-		ui_set_visible(useless.yaw_base[1], false)
-		ui_set_visible(useless.yaw[1], false)
-		ui_set_visible(useless.yaw[2], false)
-		ui_set_visible(useless.yaw_jitter[1], false)
-		ui_set_visible(useless.yaw_jitter[2], false)
-		ui_set_visible(useless.edge_yaw, false)
-		ui_set_visible(useless.fs[1], false)
-		ui_set_visible(useless.fs[2], false)
-		ui_set_visible(useless.onshot_aa[1], false)
-		ui_set_visible(useless.onshot_aa[2], false)
-		ui_set_visible(useless.fake_peek[1], false)
-		ui_set_visible(useless.fake_peek[2], false)
-		ui_set_visible(useless.double_tap[1], false)
-		ui_set_visible(useless.double_tap[2], false)
-		ui_set_visible(useless.fake_yaw_limit[1], false)
-	else
-		ui_set_visible(useless.pitch[1], true)
-		ui_set_visible(useless.yaw_base[1], true)
-		ui_set_visible(useless.yaw[1], true)
-		ui_set_visible(useless.yaw[2], true)
-		ui_set_visible(useless.edge_yaw, true)
-		ui_set_visible(useless.fs[1], true)
-		ui_set_visible(useless.fs[2], true)
-		ui_set_visible(useless.onshot_aa[1], true)
-		ui_set_visible(useless.onshot_aa[2], true)
-		ui_set_visible(useless.fake_peek[1], true)
-		ui_set_visible(useless.fake_peek[2], true)
-		ui_set_visible(useless.double_tap[1], true)
-		ui_set_visible(useless.double_tap[2], true)
-		ui_set_visible(useless.fake_yaw_limit[1], true)
-	end
-end
-client_set_event_callback('pre_render', visibility)
----------------------
-
----[ Function #2 ]---
-local function on_paint(ctx)
-
-	local r, g, b, a = ui_get(semirage.indicators_color)
-	local current_weapon = weapon_classes[entity_get_classname(entity_get_player_weapon(entity_get_local_player()))]
-
-	local enabled, fov, penetration, fire = ui_get(rage.ragebot[1]), ui_get(rage.fov), ui_get(rage.penetration), ui_get(rage.fire)
-	local improvements_hotkey = ui_get(semirage.improvements_hotkey)
-	local FireOn, PenetrationOn = ui_get(semirage.fire), ui_get(semirage.penetration)
-	local IsFire = ui_get(semirage.fire_hotkey)
-	local IsPenetration = ui_get(semirage.penetration_hotkey) 
-	local IsForceSafePoint = ui_get(rage.force_safe_point)
-	local IsForceBodyAim = ui_get(rage.force_body_aim)
-	local IsOverride = ui_get(rage.override)
-	local indicator_fire = table_contains(ui_get(semirage.indicators_mode[1]), 'Automatic fire')
-	local indicator_penetration = table_contains(ui_get(semirage.indicators_mode[1]), 'Automatic penetration')
-	local indicator_baim = table_contains(ui_get(semirage.indicators_mode[1]), 'Force body aim')
-	local indicator_safe = table_contains(ui_get(semirage.indicators_mode[1]), 'Force safe point')
-	local indicator_override = table_contains(ui_get(semirage.indicators_mode[1]), 'Override')
-	local tabbed_out = table_contains(ui_get(legitaa.auto_off[1]), 'Tabbed out')
-
-	if enabled then
-		renderer_indicator(r, g, b, a, 'FOV: ', fov, '°')
-	end
-
-	if penetration and indicator_penetration then
-		renderer_indicator(r, g, b, a, 'AP')
-	end
-
-	if fire and indicator_fire then
-		renderer_indicator(r, g, b, a, 'AF')
-	end
-
-	if IsForceBodyAim and indicator_baim then
-		renderer_indicator(r, g, b, a, 'BM')
-	end
-
-	if IsForceSafePoint and indicator_safe then
-		renderer_indicator(r, g, b, a, 'SP')
-	end
-
-	if IsOverride and indicator_override then
-		renderer_indicator(r, g, b, a, 'OV')
-	end
-
-	if IsFire or improvements_hotkey and table_contains(ui_get(semirage.improvements_mode[1]), current_weapon) then
-		vars.fire = true
-	else
-		vars.fire = false
-	end
-
-	if PenetrationOn and vars.penetration_shotme or PenetrationOn and IsPenetration or PenetrationOn and vars.visible then
-		ui_set(rage.penetration, true)
-	else
-		ui_set(rage.penetration, false)
-	end
-
-	if vars.fire and FireOn then
-		ui_set(rage.ragebot[2], 'Always on')
-		ui_set(rage.fire, true)
-	else
-		ui_set(rage.ragebot[2], 'On hotkey')
-		ui_set(rage.fire, false)
-	end
-
-	if tabbed_out then
-		client.exec('engine_no_focus_sleep 0')
-	end
-
-end
-client_set_event_callback('paint', on_paint)
----------------------
-
----[ Function #3 ]---
-local function DynamicFOV()
-	local mode = ui_get(semirage.dynamicfov_mode[1])
-	if mode ~= 'Off' then
-		local old_fov = ui_get(rage.fov)
-		vars.dynamicfov_new_fov = old_fov
-	    local enemy_players = entity_get_players(true)
-
-	    local min_fov = ui_get(semirage.dynamicfov_min)
-	    local max_fov = ui_get(semirage.dynamicfov_max)
-
-	    if min_fov > max_fov then
-	    	local store_min_fov = min_fov
-	    	min_fov = max_fov
-	    	max_fov = store_min_fov
-		end
-		
-		if #enemy_players ~= 0 then
-	        local own_x, own_y, own_z = client_eye_position()
-	        local own_pitch, own_yaw = client_camera_angles()
-	        vars.closest_enemy = nil
-	        local closest_distance = 999999999
-	        
-	        for i = 1, #enemy_players do
-	            local enemy = enemy_players[i]
-	            local enemy_x, enemy_y, enemy_z = entity_hitbox_position(enemy, 0)
-	            
-	            local x = enemy_x - own_x
-	            local y = enemy_y - own_y
-	            local z = enemy_z - own_z 
-
-	            local yaw = ((math_atan2(y, x) * 180 / math.pi))
-	            local pitch = -(math_atan2(z, math_sqrt(math_pow(x, 2) + math_pow(y, 2))) * 180 / math.pi)
-
-	            local yaw_dif = math_abs(own_yaw % 360 - yaw % 360) % 360
-	            local pitch_dif = math_abs(own_pitch - pitch ) % 360
-	            
-	            if yaw_dif > 180 then
-	                yaw_dif = 360 - yaw_dif
-	            end
-
-	            local real_dif = math_sqrt(math_pow(yaw_dif, 2) + math_pow(pitch_dif, 2))
-
-	            if closest_distance > real_dif then
-	                closest_distance = real_dif
-	                vars.closest_enemy = enemy
-	            end
-	        end
-	        
-	        if vars.closest_enemy ~= nil then
-	        	local closest_enemy_x, closest_enemy_y, closest_enemy_z = entity_hitbox_position(vars.closest_enemy, 0)
-		        local real_distance = math_sqrt(math_pow(own_x - closest_enemy_x, 2) + math_pow(own_y - closest_enemy_y, 2) + math_pow(own_z - closest_enemy_z, 2))
-
-	        	if mode == 'Static' then
-	                vars.dynamicfov_new = max_fov - ((max_fov - min_fov) * (real_distance - 250) / 1000)
-		        elseif mode == 'Auto'  then
-		        	vars.dynamicfov_new = (3800 / real_distance) * (ui_get(semirage.dynamicfov_auto_factor) * 0.01)
-		        end
-
-		        if (vars.dynamicfov_new > max_fov) then
-		        	vars.dynamicfov_new = max_fov
-		        elseif vars.dynamicfov_new < min_fov then
-		        	vars.dynamicfov_new = min_fov
-		        end
-	        end
-
-	        vars.dynamicfov_new = math_floor(vars.dynamicfov_new + 0.5)
-
-	        if (vars.dynamicfov_new > closest_distance)  then
-	        	vars.bool_in_fov = true
-	        else
-	        	vars.bool_in_fov = false
-	        end
-	    else 
-	        vars.dynamicfov_new = min_fov
-	        vars.bool_in_fov = false
-		end
-		
-		if vars.dynamicfov_new ~= old_fov then
-	    	ui_set(rage.fov, vars.dynamicfov_new)
-		end
-		
-	end
+local function vec3_normalize(x, y, z)
+    local len = math.sqrt(x * x + y * y + z * z)
+    if len == 0 then
+        return 0, 0, 0
+    end
+    local r = 1 / len
+    return x * r, y * r, z * r
 end
 
-local function DynamicFOV_drawing()
-	local mode = ui_get(semirage.dynamicfov_mode[1])
-
-	if mode ~= 'Off' then
-		local indicators_mode = ui_get(semirage.indicators_fov[1])
-		local indicators_in_fov = ui_get(semirage.indicators_fov2[1])
-
-		local r, g, b, a = ui_get(semirage.indicators_colors1)
-		local r2, g2, b2, a2 = ui_get(semirage.indicators_colors2)
-
-		if indicators_mode ~= 'Off' then
-
-			if (indicators_in_fov == 'Change circle color') and (vars.bool_in_fov) then
-				r, g, b, a = r2, g2, b2, a2
-			end
-
-			if string_match(indicators_mode, 'Circle') or string_match(indicators_mode, 'Outline') then
-				local w, h = client_screen_size()
-				local w_mid, h_mid = w / 2, h / 2
-				local model_fov = client_get_cvar('viewmodel_fov')
-				local fov_radius = vars.dynamicfov_new / model_fov * w / 2
-
-				if string_match(indicators_mode, 'Circle') then
-					renderer_circle(w_mid, h_mid, r, g, b, a, fov_radius, 0, 1)
-				elseif string_match(indicators_mode, 'Outline') then
-					if vars.bool_in_fov then
-						renderer_circle_outline(w_mid, h_mid, r, g, b, a, fov_radius, 0, 1, math_floor(1 + vars.dynamicfov_new / 10) * 2)
-					else
-						renderer_circle_outline(w_mid, h_mid, r, g, b, a, fov_radius, 0, 1, math_floor(1 + vars.dynamicfov_new / 10))
-					end
-				end
-			end
-		end
-
-		if (indicators_in_fov == 'Draw hitboxes') then
-			if vars.bool_in_fov and (vars.closest_enemy ~= nil) then
-				client_draw_hitboxes(vars.closest_enemy, 0.01, 19, r2, g2, b2)
-			end
-		end
-	end
-
+local function vec3_dot(ax, ay, az, bx, by, bz)
+    return ax * bx + ay * by + az * bz
 end
 
-local function on_run_command()
-	if ui_get(semirage.dynamicfov_restrict) then
-		DynamicFOV()
-	end
-end
-client_set_event_callback('run_command', on_run_command)
-
-local function dynamicfov_paint()
-	local restrict = ui_get(semirage.dynamicfov_restrict)
-
-	if not restrict then
-		DynamicFOV()
-	end
-	DynamicFOV_drawing()
-end
-client_set_event_callback('paint', dynamicfov_paint)
----------------------
-
----[ Function #4 ]---
-local function vec2_dist(f_x, f_y, t_x, t_y)
-    local delta_x, delta_y = f_x - t_x, f_y - t_y
-    return math_sqrt( delta_x * delta_x + delta_y * delta_y )
+local function calculate_fov(ent, lx, ly, lz, fx, fy, fz)
+    local px, py, pz = entity.get_prop(ent, 'm_vecOrigin')
+    local dx, dy, dz = vec3_normalize(px - lx, py - ly, lz - lz)
+    local dot_product = vec3_dot(dx, dy, dz, fx, fy, fz)
+    local cos_inverse = math.acos(dot_product)
+    return RAD_TO_DEG * cos_inverse
 end
 
-local function get_all_player_locations(w, h, enemy)
-	local indexes = {}
-	local positions = {}
-	local players = entity_get_players(enemy)
-	if #players == 0 or not #players then 
-		return 
-	end
-	
-	for i = 1, #players do
-		local p = players[i]
-		
-		local px, py, pz = entity_get_prop(p, 'm_vecOrigin')
-		local vz = entity_get_prop(p, 'm_vecViewOffset[2]')
-		
-		if pz ~= nil and vz ~= nil then
-			pz = pz + (vz * 0.5)
-			local sx, sy = renderer_world_to_screen(px, py, pz)
-			if sx ~= nil and sy ~= nil then
-				if sx >= 0 and sx < w and sy >= 0 and sy <= h then
-                    indexes[#indexes + 1] = p
-                    positions[#positions + 1] = {sx, sy}
-                end
-			end
-		end
-	end
-	
-	return indexes, positions
-end
-
-local function check_fov()
-    local w, h = client_screen_size()
-    local sx, sy = w * 0.5, h * 0.5
-    local fov_limit = 250
-
-    if get_all_player_locations(w, h, true) == nil then return end
-
-    local enemy_indexes, enemy_coords = get_all_player_locations(w, h, true)
-    if #enemy_indexes <= 0 then return true end
-    if #enemy_coords == 0 then return true end
-
-    local closest_fov = 133337
-    local closest_entindex = 133337
-    for i=1, #enemy_coords do
-        local x = enemy_coords[i][1]
-        local y = enemy_coords[i][2]
-
-        local cur_fov = vec2_dist(x, y, sx, sy)
-        if cur_fov < closest_fov then
-            closest_fov = cur_fov
-            closest_entindex = enemy_indexes[i]
+local function player_visible(player, lx, ly, lz, ent)
+    local visible_hitboxes = vars.rage.visible_hitboxes
+    local visible_hitboxes = 0
+    local visible_hitboxes_value = ui.get(menu.rage.penetreation_slider)
+    for i = 0, 18 do
+        local ex, ey, ez = entity.hitbox_position(ent, i)
+        local _, entindex = client.trace_line(player, lx, ly, lz, ex, ey, ez)
+        if entindex == ent then
+            visible_hitboxes = visible_hitboxes + 1
         end
     end
-
-    return closest_fov > fov_limit, closest_entindex
+    return visible_hitboxes >= visible_hitboxes_value
 end
 
-local function enable_penetration_shotme()
-	vars.penetration_shotme = true
-end
+local function get_closest_player(lx, ly, lz, pitch, yaw)
+    local nearest_player = vars.rage.nearest_player
+    local nearest_player_fov = vars.rage.nearest_player_fov
 
-local function disable_penetration_shotme()
-	vars.penetration_shotme = false
-end
-
-local function penetration_shotme(e)
-	local userid = e.userid
-	local entindex = client_userid_to_entindex(userid)
-	if entindex == entity_get_local_player() then
-		local shot_me = table_contains(ui_get(semirage.penetration_mode[1]), 'Shot me')
-
-		if not shot_me then
-			vars.penetration_shotme = false
-			return
-		end
-
-		client_delay_call(ui_get(semirage.penetration_delay_turnson), enable_penetration_shotme)
-		client_delay_call(ui_get(semirage.penetration_delay_stayson), disable_penetration_shotme)
-	end
-
-end
-client_set_event_callback('player_hurt', penetration_shotme)
-
-client_set_event_callback('paint', function()
-	local visible = table_contains(ui_get(semirage.penetration_mode[1]), 'Visible')
-
-	if visible then
-		local enemy_visible, enemy_entindex = check_fov()
-		if enemy_entindex == nil then 
-			return 
-		end
-        if enemy_visible and enemy_entindex ~= nil and vars.cached_target ~= enemy_entindex then 
-            vars.cached_target = enemy_entindex
+    local fx, fy, fz = angle_to_vec(pitch, yaw)
+    local enemy_players = entity.get_players(true)
+    local nearest_player = nil
+    local nearest_player_fov = math.huge
+    for i = 1, #enemy_players do
+        local enemy_ent = enemy_players[i]
+        local fov_to_player = calculate_fov(enemy_ent, lx, ly, lz, fx, fy, fz)
+        if fov_to_player <= nearest_player_fov then
+            nearest_player = enemy_ent
+            nearest_player_fov = fov_to_player
         end
-        local _ = can_see(enemy_entindex)
-        if _ then 
-            vars.visible = true
-        else 
-            vars.visible = false
+    end
+    return nearest_player, nearest_player_fov
+end
+
+local function visibility_rage()
+    local rage = ui.get(menu.rage.enabled)
+    local improvements = ui.get(menu.rage.improvements)
+    local fire = ui.get(menu.rage.fire)
+    local penetration = ui.get(menu.rage.penetration)
+    local dynamicfov = ui.get(menu.rage.dynamicfov)
+    local dynamicfov_mode = ui.get(menu.rage.dynamicfov_mode[1])
+    local resolver = ui.get(menu.rage.resolver)
+
+    local penetration_hotkey = table_contains(ui.get(menu.rage.penetration_mode[1]), 'On hotkey')
+    local penetration_visible = table_contains(ui.get(menu.rage.penetration_mode[1]), 'Visible')
+
+    if rage then
+        ui.set_visible(menu.rage.improvements, true)
+        ui.set_visible(menu.rage.fire, true)
+        ui.set_visible(menu.rage.penetration, true)
+        ui.set_visible(menu.rage.dynamicfov, true)
+        ui.set_visible(menu.rage.resolver, true)
+    else
+        ui.set_visible(menu.rage.improvements, false)
+        ui.set_visible(menu.rage.fire, false)
+        ui.set_visible(menu.rage.penetration, false)
+        ui.set_visible(menu.rage.dynamicfov, false)
+        ui.set_visible(menu.rage.resolver, false)
+    end
+
+    if improvements and rage then
+        ui.set_visible(menu.rage.improvements_mode[1], true)
+        ui.set_visible(menu.rage.improvements_hotkey, true)
+        ui.set_visible(menu.rage.improvements_nades[1], true)
+    else
+        ui.set_visible(menu.rage.improvements_mode[1], false)
+        ui.set_visible(menu.rage.improvements_hotkey, false)
+        ui.set_visible(menu.rage.improvements_nades[1], false)
+    end
+
+    if fire and rage then
+        ui.set_visible(menu.rage.fire_hotkey, true)
+    else
+        ui.set_visible(menu.rage.fire_hotkey, false)
+    end
+
+    if penetration and rage then
+        ui.set_visible(menu.rage.penetration_mode[1], true)
+        ui.set_visible(menu.rage.penetreation_slider, true)
+    else
+        ui.set_visible(menu.rage.penetration_mode[1], false)
+        ui.set_visible(menu.rage.penetreation_slider, false)
+    end
+
+    if dynamicfov and rage then
+        ui.set_visible(menu.rage.dynamicfov_mode[1], true)
+        ui.set_visible(menu.rage.dynamicfov_autofactor, true)
+    else
+        ui.set_visible(menu.rage.dynamicfov_mode[1], false)
+        ui.set_visible(menu.rage.dynamicfov_autofactor, false)
+    end
+
+    if resolver and rage then
+        ui.set_visible(menu.rage.resolver_hotkey, true)
+    else
+        ui.set_visible(menu.rage.resolver_hotkey, false)
+    end
+
+    ui.set_visible(menu.rage.penetration_hotkey, penetration and penetration_hotkey and rage)
+    ui.set_visible(menu.rage.penetreation_slider, penetration and penetration_visible and rage)
+    ui.set_visible(menu.rage.dynamicfov_min_snipers, dynamicfov and dynamicfov_mode == 'Snipers' and rage)
+    ui.set_visible(menu.rage.dynamicfov_max_snipers, dynamicfov and dynamicfov_mode == 'Snipers' and rage)
+    ui.set_visible(menu.rage.dynamicfov_min_deagle, dynamicfov and dynamicfov_mode == 'Deagle' and rage)
+    ui.set_visible(menu.rage.dynamicfov_max_deagle, dynamicfov and dynamicfov_mode == 'Deagle' and rage)
+    ui.set_visible(menu.rage.dynamicfov_min_pistols, dynamicfov and dynamicfov_mode == 'Pistols' and rage)
+    ui.set_visible(menu.rage.dynamicfov_max_pistols, dynamicfov and dynamicfov_mode == 'Pistols' and rage)
+    ui.set_visible(menu.rage.dynamicfov_min_others, dynamicfov and dynamicfov_mode == 'Others' and rage)
+    ui.set_visible(menu.rage.dynamicfov_max_others, dynamicfov and dynamicfov_mode == 'Others' and rage)
+end
+
+local function visibility_visuals()
+    local visuals = ui.get(menu.visuals.enabled)
+    local indicators = ui.get(menu.visuals.indicators)
+    local flags = ui.get(menu.visuals.flags)
+
+    if visuals then
+        ui.set_visible(menu.visuals.indicators, true)
+        ui.set_visible(menu.visuals.flags, true)
+    else
+        ui.set_visible(menu.visuals.indicators, false)
+        ui.set_visible(menu.visuals.flags, false)
+    end
+
+    if indicators and visuals then
+        ui.set_visible(menu.visuals.indicators_type[1], true)
+        ui.set_visible(menu.visuals.indicators_mode[1], true)
+    else
+        ui.set_visible(menu.visuals.indicators_type[1], false)
+        ui.set_visible(menu.visuals.indicators_mode[1], false)
+    end
+
+    if flags and visuals then
+        ui.set_visible(menu.visuals.flags_mode[1], true)
+    else
+        ui.set_visible(menu.visuals.flags_mode[1], false)
+    end
+end
+
+local function visibility_misc()
+    local misc = ui.get(menu.misc.enabled)
+    
+    if misc then
+        ui.set_visible(menu.misc.logs, true)
+        ui.set_visible(menu.misc.spam, true)
+    else
+        ui.set_visible(menu.misc.logs, false)
+        ui.set_visible(menu.misc.spam, false)
+    end
+end
+
+local function rage()
+    local weapon = weapon_classes[entity.get_classname(entity.get_player_weapon(entity.get_local_player()))]
+    local vars_fire = vars.rage.fire
+    local vars_penetration = vars.rage.penetration
+    local vars_penetration2 = vars.rage.penetration2
+
+    local semirage = ui.get(menu.rage.enabled)
+    local improvements = ui.get(menu.rage.improvements)
+    local improvements_hotkey = ui.get(menu.rage.improvements_hotkey)
+    local fire = ui.get(menu.rage.fire)
+    local fire_hotkey = ui.get(menu.rage.fire_hotkey)
+    local penetration = ui.get(menu.rage.penetration)
+    local penetration_hotkey = ui.get(menu.rage.penetration_hotkey)
+
+    local maximum_fov = ui.get(references.rage.fov)
+    local player = entity.get_local_player()
+    local pitch, yaw = client.camera_angles()
+    local lx, ly, lz = entity.get_prop(player, 'm_vecOrigin')
+    local nearest_player, nearest_player_fov = get_closest_player(lx, ly, lz, pitch, yaw)
+    local view_offset = entity.get_prop(player, 'm_vecViewOffset[2]')
+    local lz = lz + view_offset
+
+    local penetration_visible = table_contains(ui.get(menu.rage.penetration_mode[1]), 'Visible')
+
+    if semirage and improvements and improvements_hotkey and table_contains(ui.get(menu.rage.improvements_mode[1]), weapon) or semirage and fire and fire_hotkey then
+        vars.rage.fire = true
+    else
+        vars.rage.fire = false
+    end
+
+    if semirage and penetration and penetration_hotkey then
+        vars.rage.penetration = true
+    else
+        vars.rage.penetration = false
+    end
+
+    if nearest_player ~= nil and nearest_player_fov <= maximum_fov and penetration and penetration_visible then
+        vars_penetration2 = player_visible(player, lx, ly, lz, nearest_player)
+    else
+        vars_penetration2 = false
+    end
+
+    if vars_fire and fire and fire_hotkey then
+        ui.set(references.rage.enabled[2], 'Always on')
+        ui.set(references.rage.fire, true)
+    else
+        ui.set(references.rage.enabled[2], 'On hotkey')
+        ui.set(references.rage.fire, false)
+    end
+
+    if vars_penetration2 or vars_penetration and penetration and penetration_hotkey then
+        ui.set(references.rage.penetration, true)
+    else
+        ui.set(references.rage.penetration, false)
+    end
+end
+
+local function dynamicfov()
+    local weapon = weapon_classes[entity.get_classname(entity.get_player_weapon(entity.get_local_player()))]
+
+    local autofactor = vars.rage.autofactor
+    local max_fov = vars.rage.max_fov
+    local min_fov = vars.rage.min_fov
+    local dynamicfov_new_fov = vars.rage.dynamicfov_new_fov
+    local bool_in_fov = vars.rage.bool_in_fov
+    local closest_enemy = vars.rage.closest_enemy
+
+    if weapon == 'Snipers' then
+        autofactor = ui.get(menu.rage.dynamicfov_autofactor)
+        max_fov = ui.get(menu.rage.dynamicfov_max_snipers)
+        min_fov = ui.get(menu.rage.dynamicfov_min_snipers)
+    elseif weapon == 'Deagle' then
+        autofactor = ui.get(menu.rage.dynamicfov_autofactor)
+        max_fov = ui.get(menu.rage.dynamicfov_max_deagle)
+        min_fov = ui.get(menu.rage.dynamicfov_min_deagle)
+    elseif weapon == 'Pistols' then
+        autofactor = ui.get(menu.rage.dynamicfov_autofactor)
+        max_fov = ui.get(menu.rage.dynamicfov_max_pistols)
+        min_fov = ui.get(menu.rage.dynamicfov_min_pistols)
+    elseif weapon == 'Others' then
+        autofactor = ui.get(menu.rage.dynamicfov_autofactor)
+        max_fov = ui.get(menu.rage.dynamicfov_max_others)
+        min_fov = ui.get(menu.rage.dynamicfov_min_others)
+    end
+
+    if autofactor == nil or max_fov == nil or min_fov == nil then
+        return
+    end
+
+    local old_fov = ui.get(references.rage.fov)
+    dynamicfov_new_fov = old_fov
+    local enemy_players = entity.get_players(true)
+
+    if min_fov > max_fov then
+        local store_min_fov = min_fov
+        min_fov = max_fov
+        max_fov = store_min_fov
+    end
+
+    if #enemy_players ~= 0 then
+        local own_x, own_y, own_z = client.eye_position()
+        local own_pitch, own_yaw = client.camera_angles()
+        local closest_enemy = nil
+        local closest_distance = 999999999
+        
+        for i = 1, #enemy_players do
+            local enemy = enemy_players[i]
+            local enemy_x, enemy_y, enemy_z = entity.hitbox_position(enemy, 0)
+            
+            local x = enemy_x - own_x
+            local y = enemy_y - own_y
+            local z = enemy_z - own_z 
+
+            local yaw = ((math.atan2(y, x) * 180 / math.pi))
+            local pitch = -(math.atan2(z, math.sqrt(math.pow(x, 2) + math.pow(y, 2))) * 180 / math.pi)
+
+            local yaw_dif = math.abs(own_yaw % 360 - yaw % 360) % 360
+            local pitch_dif = math.abs(own_pitch - pitch ) % 360
+            
+            if yaw_dif > 180 then
+                yaw_dif = 360 - yaw_dif
+            end
+
+            local real_dif = math.sqrt(math.pow(yaw_dif, 2) + math.pow(pitch_dif, 2))
+
+            if closest_distance > real_dif then
+                closest_distance = real_dif
+                closest_enemy = enemy
+            end
         end
-		vars.cached_target = enemy_entindex
-	else
-		return
-	end
+        
+        if closest_enemy ~= nil then
+            local closest_enemy_x, closest_enemy_y, closest_enemy_z = entity.hitbox_position(closest_enemy, 0)
+            local real_distance = math.sqrt(math.pow(own_x - closest_enemy_x, 2) + math.pow(own_y - closest_enemy_y, 2) + math.pow(own_z - closest_enemy_z, 2))
 
+            dynamicfov_new_fov = (3800 / real_distance) * (ui.get(menu.rage.dynamicfov_autofactor) * 0.01)
+
+            if (dynamicfov_new_fov > max_fov) then
+                dynamicfov_new_fov = max_fov
+            elseif dynamicfov_new_fov < min_fov then
+                dynamicfov_new_fov = min_fov
+            end
+        end
+        
+        dynamicfov_new_fov = math.floor(dynamicfov_new_fov + 0.5)
+
+        if (dynamicfov_new_fov > closest_distance) then
+            bool_in_fov = true
+        else
+            bool_in_fov = false
+        end
+    else 
+        dynamicfov_new_fov = min_fov
+        bool_in_fov = false
+    end
+
+    if dynamicfov_new_fov ~= old_fov and weapon == 'Snipers' then
+        ui.set(references.rage.fov, dynamicfov_new_fov)
+    end
+
+    if dynamicfov_new_fov ~= old_fov and weapon == 'Deagle' then
+        ui.set(references.rage.fov, dynamicfov_new_fov)
+    end
+
+    if dynamicfov_new_fov ~= old_fov and weapon == 'Pistols' then
+        ui.set(references.rage.fov, dynamicfov_new_fov)
+    end
+
+    if dynamicfov_new_fov ~= old_fov and weapon == 'Others' then
+        ui.set(references.rage.fov, dynamicfov_new_fov)
+    end
+
+end
+
+local function visuals()
+    local penetration = ui.get(references.rage.penetration)
+    local fire = ui.get(references.rage.fire)
+
+    local semivisuals = ui.get(menu.visuals.enabled)
+    local indicators = ui.get(menu.visuals.indicators)
+    local flags = ui.get(menu.visuals.flags)
+    local resolver = ui.get(menu.rage.resolver)
+    local body_yaw = ui.get(references.players.body_yaw)
+    local body_yaw_slider = ui.get(references.players.body_yaw_slider[1])
+    local antiaim = ui.get(references.aa.enabled[1])
+    local fov = ui.get(references.rage.fov)
+    local penetration_hotkey = ui.get(menu.rage.penetration_hotkey)
+    local bodyaim = ui.get(references.rage.bodyaim)
+
+    local indicators_type = ui.get(menu.visuals.indicators_type[1])
+
+    local indicators_mode_resolver = table_contains(ui.get(menu.visuals.indicators_mode[1]), 'Resolver')
+    local indicators_mode_fake = table_contains(ui.get(menu.visuals.indicators_mode[1]), 'FAKE')
+    local indicators_mode_fov = table_contains(ui.get(menu.visuals.indicators_mode[1]), 'FOV')
+    local indicators_mode_fire = table_contains(ui.get(menu.visuals.indicators_mode[1]), 'Automatic fire')
+    local indicators_mode_penetration = table_contains(ui.get(menu.visuals.indicators_mode[1]), 'Automatic penetration')
+    local indicators_mode_bodyaim = table_contains(ui.get(menu.visuals.indicators_mode[1]), 'Force body aim')
+    local indicators_mode_mindmg = table_contains(ui.get(menu.visuals.indicators_mode[1]), 'Minimum damage')
+
+    if indicators and indicators_mode_fake and entity.is_alive(entity.get_local_player()) and antiaim then
+        local color = { 255-(angle*2.29824561404), angle*3.42105263158, angle*0.22807017543 }
+		local y = renderer.indicator(color[1], color[2], color[3], 255, 'FAKE')+20
+		local x = 87
+		renderer.circle_outline(x, y, 0, 0, 0, 155, 10, 0, 1, 6)
+        renderer.circle_outline(x, y, color[1], color[2], color[3], 255, 9, 0, angle*0.01754385964, 4)
+    end
+
+    if indicators and indicators_mode_fov then
+        renderer.indicator(180, 238, 0, 255, 'FOV: ', fov, '°')
+    end
+
+    if indicators and indicators_mode_mindmg then
+        renderer.indicator(255, 255, 255, 255, 'DMG: ', ui.get(references.rage.mindmg))
+    end
+
+    if (indicators_type == 'Default') then
+        if indicators and indicators_mode_resolver and resolver then
+            if body_yaw_slider == 60 and body_yaw then
+                renderer.indicator(152, 204, 0, 255, 'R:RIGHT')
+            elseif body_yaw_slider == -60 and body_yaw then
+                renderer.indicator(152, 204, 0, 255, 'R:LEFT')
+            elseif body_yaw_slider == 0 then    
+                renderer.indicator(152, 204, 0, 255, 'R:OFF')
+            end
+        end
+
+        if indicators and indicators_mode_fire and fire then
+            renderer.indicator(180, 238, 0, 255, 'TM')
+        end
+
+        if indicators and indicators_mode_penetration and penetration then
+            renderer.indicator(180, 238, 0, 255, 'AW')
+        end
+
+        if indicators and indicators_mode_bodyaim and bodyaim then
+            renderer.indicator(180, 238, 0, 255, 'BAIM')
+        end
+    elseif (indicators_type == 'Crosshair') then
+        if indicators and indicators_mode_resolver and resolver then
+            if body_yaw_slider == 60 and body_yaw then
+                renderer.text(x, y + 60, 180, 238, 0, 255, 'dcb', 0, 'R:RIGHT')
+            elseif body_yaw_slider == -60 and body_yaw then
+                renderer.text(x, y + 60, 180, 238, 0, 255, 'dcb', 0, 'R:LEFT')
+            elseif body_yaw_slider == 0 then    
+                renderer.text(x, y + 60, 180, 238, 0, 255, 'dcb', 0, 'R:OFF')
+            end
+        end
+
+        if indicators and indicators_mode_fire and fire then
+            renderer.text(x, y + 30, 180, 238, 0, 255, 'dcb', 0, 'TM')
+        else
+            renderer.text(x, y + 30, 0, 0, 0, 50, 'dcb', 0, 'TM')
+        end
+
+        if indicators and indicators_mode_penetration and penetration then
+            renderer.text(x, y + 40, 180, 238, 0, 255, 'dcb', 0, 'AW')
+        else
+            renderer.text(x, y + 40, 0, 0, 0, 50, 'dcb', 0, 'AW')
+        end
+
+        if indicators and indicators_mode_bodyaim and bodyaim then
+            renderer.text(x, y + 50, 180, 238, 0, 255, 'dcb', 0, 'BAIM')
+        else
+            renderer.text(x, y + 50, 0, 0, 0, 50, 'dcb', 0, 'BAIM')
+        end
+    end
+end
+
+local function body_yaw()
+    local resolver = ui.get(menu.rage.resolver)
+    local body_yaw = ui.get(references.players.body_yaw_slider[1])
+
+    if resolver == false then
+        return
+    end
+
+    if body_yaw == 0 and bruteforce_manual == true then
+        ui.set(references.players.body_yaw, true)
+        ui.set(references.players.body_yaw_slider[1], 60)
+        ui.set(references.players.apply_all, true)
+        bruteforce_manual = false
+    end
+    if body_yaw == 60 and bruteforce_manual == true then
+        ui.set(references.players.body_yaw, true)
+        ui.set(references.players.body_yaw_slider[1], -60)
+        ui.set(references.players.apply_all, true)
+        bruteforce_manual = false
+    end
+    if body_yaw == -60 and bruteforce_manual == true then
+        ui.set(references.players.body_yaw, false)
+        ui.set(references.players.body_yaw_slider[1], 0)
+        ui.set(references.players.apply_all, true)
+        bruteforce_manual = false
+    end
+end
+
+local function resolver()
+    local resolver = ui.get(menu.rage.resolver)
+    local resolver_hotkey = ui.get(menu.rage.resolver_hotkey)
+
+    if not resolver then
+        return
+    end
+
+    if resolver_hotkey then
+        if bruteforce_manual == true then
+            body_yaw()
+            bruteforce_manual = false
+        end
+    else
+        bruteforce_manual = true
+    end
+end
+
+local function miss(e)
+    local logs = ui.get(menu.misc.logs)
+
+    if logs then
+        ui.set(references.rage.miss, false)
+        local reason
+        local entityHealth = entity.get_prop(e.target, 'm_iHealth')
+        if (entityHealth == nil) or (entityHealth <= 0) then
+            print_chat('\x01[ \x04gamesense\x01 ] The player was killed prior to your shot being able to land')
+            return	
+        end
+        if e.reason == '?' then
+            reason = 'resolver'
+        else
+            reason = e.reason
+        end
+        print_chat('\x01[ \x04gamesense\x01 ] Missed shot due to ' .. reason)
+    end
+end
+client.set_event_callback('aim_miss', miss)
+
+client.set_event_callback('pre_render', function()
+    visibility_rage()
+    visibility_visuals()
+    visibility_misc()
 end)
 
-client_set_event_callback('round_start', function()
-	vars.visible = false
-	vars.penetration_shotme = false
-	vars.name_player = nil
+client.set_event_callback('setup_command', function(c)
+	if c.chokedcommands == 0 then
+		if c.in_use == 1 then
+			angle = 0
+		else
+			angle = math.min(57, math.abs(entity.get_prop(entity.get_local_player(), 'm_flPoseParameter', 11)*120-60))
+		end
+	end
 end)
----------------------
 
----[ Function #5 ]---
-local frametimes = {}
-local fps_prev = 0
-local last_update_time = 0
-
-local function AccumulateFps()
-	local ft = globals_absoluteframetime()
-	if ft > 0 then
-		table_insert(frametimes, 1, ft)
-	end
-	local count = #frametimes
-	if count == 0 then
-		return 0
-	end
-	local i, accum = 0, 0
-	while accum < 0.5 do
-		i = i + 1
-		accum = accum + frametimes[i]
-		if i >= count then
-			break
-		end
-	end
-	accum = accum / i
-	while i < count do
-		i = i + 1
-		table_remove(frametimes)
-	end
-	local fps = 1 / accum
-	local rt = globals_realtime()
-	if math_abs(fps - fps_prev) > 4 or rt - last_update_time > 2 then
-		fps_prev = fps
-		last_update_time = rt
-	else
-		fps = fps_prev
-	end
-	return math_floor(fps + 0.5)
-end
-
-local function Sync()
-	local indicators = ui_get(legitaa.indicators[1])
-	local arrow = table_contains(indicators, 'Arrow')
-	local text = table_contains(indicators, 'Text')
-
-	vars.legitaa_value1 = arrow
-	vars.legitaa_value2 = text
-
-end
-
-local function Sync2()
-	local mode = ui_get(legitaa.auto_off[1])
-	local show_slider = table_contains(mode, 'Show sliders')
-	local fps_slider = table_contains(mode, 'FPS')
-	local ping_slider = table_contains(mode, 'Ping')
-	local speed_slider = table_contains(mode, 'Speed')
-	local loss_slider = table_contains(mode, 'Loss')
-	local choke_slider = table_contains(mode, 'Choke')
-
-	vars.legitaa_show_slider = show_slider
-	vars.legitaa_fps_slider = fps_slider
-	vars.legitaa_ping_slider = ping_slider
-	vars.legitaa_speed_slider = speed_slider
-	vars.legitaa_loss_slider = loss_slider
-	vars.legitaa_choke_slider = choke_slider
-
-end
-
-local function HandleMenu()
-
-	local enabled = ui_get(legitaa.enabled)
-	local check = vars.legitaa_check
-
-	if enabled then
-		check = true
-		client_delay_call(0.1, function()
-			oldcfg = ui_get(misc.cfg[1])
-		end)
-		ui_set(aa.antiaim[1], true)
-		ui_set(aa.pitch[1], 'Off')
-		ui_set(aa.yaw_base[1], 'Local view')
-		ui_set(aa.yaw[1], 'Off')
-		ui_set(aa.yaw[2], 0)
-		ui_set(aa.yaw_jitter[1], 'Off')
-		ui_set(aa.yaw_jitter[2], 0)
-		ui_set(aa.body_yaw[1], 'Static')
-		ui_set(aa.fake_yaw_limit[1], 60)
-		ui_set(aa.edge_yaw, false)
-		ui_set(aa.fs[1], '-')
-		ui_set(fl.fakelag[1], false)
-		ui_set(fl.limit, 6)
-		ui_set(semirage.hide_useless_features, true)
-	else
-		if check then
-			check = false
-			if oldcfg == ui_get(misc.cfg) then
-				ui_set(aa.antiaim[1], false)
-			end
-		end
-		ui_set(semirage.hide_useless_features, false)
-	end
-	Sync()
-	Sync2()
-end
-
-local function conditions()
-
-	local fakeduck = ui_reference('RAGE', 'Other', 'Duck peek assist')
-
-	local stop_1 = vars.legitaa_stop1
-	local stop_2 = vars.legitaa_stop2
-	local stop_3 = vars.legitaa_stop3
-	local stop_4 = vars.legitaa_stop4
-	local stop_5 = vars.legitaa_stop5
-	local stop_6 = ui_get(fakeduck)
-
-	if stop_1 then
-		ui_set(aa.antiaim[1], false)
-	elseif stop_2 then
-		ui_set(aa.antiaim[1], false)
-	elseif stop_3 then
-		ui_set(aa.antiaim[1], false)
-	elseif stop_4 then
-		ui_set(aa.antiaim[1], false)
-	elseif stop_5 then
-		ui_set(aa.antiaim[1], false)
-	elseif stop_6 then
-		ui_set(aa.antiaim[1], false)
-	else
-		ui_set(aa.antiaim[1], true)
-	end
-end
-
-HandleMenu()
-ui_set_callback(legitaa.enabled, HandleMenu)
-
-ffi.cdef[[
-    typedef void*(__thiscall* get_net_channel_info_t)(void*);
-    typedef const char*(__thiscall* get_name_t)(void*);
-    typedef const char*(__thiscall* get_address_t)(void*);
-    typedef float(__thiscall* get_local_time_t)(void*);
-    typedef float(__thiscall* get_time_connected_t)(void*);
-    typedef float(__thiscall* get_avg_latency_t)(void*, int);
-    typedef float(__thiscall* get_avg_loss_t)(void*, int);
-    typedef float(__thiscall* get_avg_choke_t)(void*, int);
-]]
-
-local interface_ptr = ffi.typeof('void***')
-local rawivengineclient = client_create_interface('engine.dll', 'VEngineClient014') or error('VEngineClient014 wasnt found', 2)
-local ivengineclient = ffi.cast(interface_ptr, rawivengineclient) or error('rawivengineclient is nil', 2)
-local get_net_channel_info = ffi.cast('get_net_channel_info_t', ivengineclient[0][78]) or error('ivengineclient is nil')
-local FLOW_OUTGOING = 0
-local FLOW_INCOMING	= 1
-local MAX_FLOWS = 2
-
-client_set_event_callback('paint', function()
-	if not ui_get(legitaa.enabled) then
-		return
-	end
-
-	local netchaninfo = ffi.cast('void***', get_net_channel_info(ivengineclient))
-	local get_avg_loss = ffi.cast('get_avg_loss_t', netchaninfo[0][11])
-	local get_avg_choke = ffi.cast('get_avg_choke_t', netchaninfo[0][12])
-	local Tickrate = 1 / globals_tickinterval()
-	local vx, vy = entity_get_prop(entity_get_local_player(), 'm_vecVelocity')
-	local r, g, b, a = ui_get(legitaa.indicators_color)
-	local r2, g2, b2, a2 = ui_get(legitaa.arrows_color)
-
-	local x, y = client_screen_size()
-	local ping = math_floor(client_latency()*1000)
-	local loss = get_avg_loss(netchaninfo, FLOW_INCOMING)
-	local choke = get_avg_choke(netchaninfo, FLOW_INCOMING)
-	local enabled = ui_get(aa.antiaim[1])
-	local hotkey = ui_get(legitaa.legitaa_key)
-	local fs_body = ui_get(aa.fs_body_yaw)
-
-	local value1 = vars.legitaa_value1
-	local value2 = vars.legitaa_value2
-
-	local slider1 = vars.legitaa_fps_slider
-	local slider2 = vars.legitaa_ping_slider
-	local slider3 = vars.legitaa_speed_slider
-	local slider4 = vars.legitaa_loss_slider
-	local slider5 = vars.legitaa_choke_slider
-
-	if vx ~= nil then
-		speed = math_floor(math_sqrt(vx*vx + vy*vy + 0.5))
-	end
-
-	if (ui_get(legitaa.aa_mode[1]) == 'Safe') then
-		ui_set(aa.body_yaw_target[1], 'Eye yaw')
-	elseif (ui_get(legitaa.aa_mode[1]) == 'Maximum') then
-		ui_set(aa.body_yaw_target[1], 'Opposite')
-	end
-
-	if value1 then
-		if hotkey then
-			renderer_text(x/2-60, y/2, r, g, b, a, '+cd', 0, '⮜')
-			if ui_get(legitaa.both_arrows) then
-				renderer_text(x/2+60, y/2, r2, g2, b2, a2, '+cd', 0, '⮞')
-			end
-		else
-			renderer_text(x/2+60, y/2, r, g, b, a, '+cd', 0, '⮞')
-			if ui_get(legitaa.both_arrows) then
-				renderer_text(x/2-60, y/2, r2, g2, b2, a2, '+cd', 0, '⮜')
-			end
-		end
-	end
-
-	if value2 then
-		if not fs_body then
-			if hotkey then
-				renderer_indicator(r, g, b, a, 'LEFT')
-			else
-				renderer_indicator(r, g, b, a, 'RIGHT')
-			end
-		end
-	end
-
-	if fs_body and enabled then
-		ui_set(aa.body_yaw[1], 'Opposite')
-		ui_set_visible(legitaa.legitaa_key, false)
-		ui_set(legitaa.indicators[1], 'Text')
-		renderer_indicator(r, g, b, a, 'DYNAMIC')
-	else
-		ui_set_visible(legitaa.legitaa_key, true)
-		if hotkey then
-			ui_set(aa.body_yaw[2], 60)
-			ui_set(aa.body_yaw[1], 'Static')
-		else
-			ui_set(aa.body_yaw[2], -60)
-			ui_set(aa.body_yaw[1], 'Static')
-		end
-	end
-
-	if slider1 then
-		if (ui_get(legitaa.fps_slider) == 59) then
-			if(AccumulateFps() < Tickrate) then
-				vars.legitaa_stop1 = true
-			else
-				vars.legitaa_stop1 = false
-			end
-		else
-			if(AccumulateFps() < ui_get(legitaa.fps_slider)) then
-				vars.legitaa_stop1 = true
-			else
-				vars.legitaa_stop1 = false
-			end
-		end
-	else
-		vars.legitaa_stop1 = false
-	end
-
-	if slider2 then
-		if (ping > (ui_get(legitaa.ping_slider))) then
-			vars.legitaa_stop2 = true
-		else
-			vars.legitaa_stop2 = false
-		end
-	else
-		vars.legitaa_stop2 = false
-	end
-
-	if slider3 then
-		if (speed > (ui_get(legitaa.speed_slider))) then
-			vars.legitaa_stop3 = true
-		else
-			vars.legitaa_stop3 = false
-		end
-	else
-		vars.legitaa_stop3 = false
-	end
-
-	if slider4 then
-		if (loss > (ui_get(legitaa.loss_slider))) then
-			vars.legitaa_stop4 = true
-		else
-			vars.legitaa_stop4 = false
-		end
-	else
-		vars.legitaa_stop4 = false
-	end
-
-	if slider5 then
-		if (choke > (ui_get(legitaa.choke_slider))) then
-			vars.legitaa_stop5 = true
-		else
-			vars.legitaa_stop5 = false
-		end
-	else
-		vars.legitaa_stop5 = false
-	end
-
-	Sync()
-	Sync2()
-	conditions()
-end)
----------------------
-
----[ Function #6 ]---
-local function time_to_ticks(t)
-	return math_floor(0.5 + (t / globals_tickinterval()))
-end
-
-local hitgroups_names = { 'generic', 'head', 'chest', 'stomach', 'left arm', 'right arm', 'left leg', 'right leg', 'neck', '?', 'gear' }
-
-local function on_fire(e)
-	local logs = ui_get(semirage.advanced_logs) and table_contains(ui_get(semirage.logs_mode[1]), 'Fire')
-
-	if logs and e ~= nil then
-		local flags = { e.teleported and 'T' or '', e.interpolated and 'I' or '', e.extrapolated and 'E' or '', e.boosted and 'B' or '', e.high_priority and 'H' or '' }
-		local group = hitgroups_names[e.hitgroup + 1] or '?'
-
-		client_log(string_format('Fired at %s in the %s for %d damage (hitchance = %d%%, bt=%2d, flags=%s)', entity_get_player_name(e.target), group, e.damage, math_floor(e.hit_chance + 0.5), time_to_ticks(e.backtrack), table_concat(flags)))
-	end
-end
-client_set_event_callback('aim_fire', on_fire)
-
-local function on_hit(e)
-	local logs = ui_get(semirage.advanced_logs) and table_contains(ui_get(semirage.logs_mode[1]), 'Hit')
-
-	if logs and e ~= nil then
-		local group = hitgroups_names[e.hitgroup + 1] or '?'
-
-		client_log(string_format('Hit %s in the %s for %d damage (%d health remaining)', entity_get_player_name(e.target), group, e.damage, entity_get_prop(e.target, 'm_iHealth')))
-	end
-end
-client_set_event_callback('aim_hit', on_hit)
-
-local function on_miss(e)
-	local logs = ui_get(semirage.advanced_logs) and table_contains(ui_get(semirage.logs_mode[1]), 'Miss')
-
-	if logs and e ~= nil then
-		local group = hitgroups_names[e.hitgroup + 1] or '?'
-		local reason 
-
-		if e.reason == '?' then
-			reason = 'unknown'
-		else
-			reason = e.reason
-		end
-
-		client_log(string_format('Missed %s in the %s due to %s', entity_get_player_name(e.target), group, reason))
-	end
-end
-client_set_event_callback('aim_miss', on_miss)
----------------------
-
----[ Function #7 ]---
-ffi.cdef[[
-    typedef bool(__thiscall* lgts)(float, float, float, float, float, float, short);
-]]
-
-local signature = '\x55\x8B\xEC\x83\xEC\x08\x8B\x15\xCC\xCC\xCC\xCC\x0F\x57'
-local match = client_find_signature('client.dll', signature) or error('client_find_signature fucked up')
-local line_goes_through_smoke = ffi.cast('lgts', match) or error('ffi.cast fucked up')
-
-client_set_event_callback('run_command', function()
-	local smoke_check = table_contains(ui_get(semirage.improvements_nades[1]), 'Smoke')
+client.set_event_callback('run_command', function()
+	local smoke_check = table_contains(ui.get(menu.rage.improvements_nades[1]), 'Smoke')
 
 	if smoke_check then
-		client_update_player_list()
-		local local_player = entity_get_local_player()
-		local local_head = { entity_hitbox_position(local_player, 0) }
-		for _, v in pairs(entity_get_players(true)) do
-			ui_set(players.lists, v)
-			local entity_head = { entity_hitbox_position(v, 0) }
-			ui_set(players.whitelist, line_goes_through_smoke(local_head[1], local_head[2], local_head[3], entity_head[1], entity_head[2], entity_head[3], 1))
+		client.update_player_list()
+		local local_player = entity.get_local_player()
+		local local_head = { entity.hitbox_position(local_player, 0) }
+		for _, v in pairs(entity.get_players(true)) do
+			ui.set(references.players.lists, v)
+			local entity_head = { entity.hitbox_position(v, 0) }
+			ui.set(references.players.whitelist, line_goes_through_smoke(local_head[1], local_head[2], local_head[3], entity_head[1], entity_head[2], entity_head[3], 1))
 		end
 	end
 end)
 
-client_set_event_callback('player_blind', function(e)
-	local flash_check = table_contains(ui_get(semirage.improvements_nades[1]), 'Flash')
+client.set_event_callback('player_blind', function(e)
+	local flash_check = table_contains(ui.get(menu.rage.improvements_nades[1]), 'Flash')
 
-	local player = entity_get_local_player()
-	local useridEnt = (client_userid_to_entindex(e.userid))
+	local player = entity.get_local_player()
+	local useridEnt = (client.userid_to_entindex(e.userid))
 
 	if useridEnt == player and flash_check then
-		client_delay_call(0.1, function()
-		 local flash_duration = entity_get_prop(player, 'm_flFlashDuration')
+		client.delay_call(0.1, function()
+		 local flash_duration = entity.get_prop(player, 'm_flFlashDuration')
 		 	if flash_duration >= 1 then
-				ui_set(rage.ragebot[1], false)
-				client_delay_call(flash_duration - 2, function() 
-					ui_set(rage.ragebot[1], true) 
+				ui.set(references.rage.enabled[1], false)
+				client.delay_call(flash_duration - 2, function() 
+					ui.set(references.rage.enabled[1], true) 
 				end)
 			end
 		end)
 	end
 end)
 
-client_set_event_callback('shutdown', function() 
-	ui_set(players.reset_all, true)
+client.set_event_callback('paint', function()
+    rage()
+    dynamicfov()
+    visuals()
+    resolver()
 end)
----------------------
 
----[ Function #8 ]---
-local updates = vars.legitaa_updates
-local targeted = vars.legitaa_target
 
-client_set_event_callback('setup_command', function(cmd)
+client.register_esp_flag('FAKE', 255, 255, 255, function(c)
+    local flags = ui.get(menu.visuals.flags)
+    local flags_mode_fake = table_contains(ui.get(menu.visuals.flags_mode[1]), 'FAKE')
 
-	if cmd.chokedcommands == 0 then
-		updates = updates + 1
-		targeted = targeted + 1
-	end
-		
-	if targeted >= ui_get(fl.limit) then
-		targeted = 0
-	end
-		
-	if cmd.in_forward == 0 and cmd.in_back == 0 and cmd.in_moveleft == 0 and cmd.in_moveright == 0 then
-		cmd.allow_send_packet = false
-		if ui_get(legitaa.aa_mode_v2) == 'Fake twist' then 
-			ui_set(legitaa.aa_mode[1], 'Maximum')
-			ui_set(fl.limit, 6)
-			if (cmd.chokedcommands % (updates % 2 == 0 and ui_get(fl.limit) / 2 or 0 ) == 0 ) then
-				cmd.forwardmove = 1.01
-			end
-		elseif ui_get(legitaa.aa_mode_v2) == 'Fake jitter' then 
-			ui_set(legitaa.aa_mode[1], 'Maximum')
-			ui_set(fl.limit, 6)
-			if cmd.chokedcommands % 2 ~= 0 and cmd.chokedcommands % targeted == 0 then
-				cmd.forwardmove = 1.01
-			end
-		elseif ui_get(legitaa.aa_mode_v2) == 'Fake max' then 
-			ui_set(legitaa.aa_mode[1], 'Maximum')
-			ui_set(fl.limit, 6)
-			if cmd.chokedcommands % targeted then
-				cmd.forwardmove = 1.01
-			end
-		elseif ui_get(legitaa.aa_mode_v2) == 'Cradle' then
-			ui_set(legitaa.aa_mode[1], 'Maximum')
-			ui_set(fl.limit, 6)
-			if cmd.chokedcommands % targeted == 0 then
-				cmd.forwardmove = 1.01
-			end
-		elseif ui_get(legitaa.aa_mode_v2) == 'Shake' then
-			ui_set(legitaa.aa_mode[1], 'Maximum')
-			ui_set(fl.limit, 3) 
-			if cmd.chokedcommands % 3 == 0 or cmd.chokedcommands % targeted / 2 == 0 then
-				cmd.forwardmove = 1.01
-			end
-		end
-	end
+    if entity.is_enemy(c) and flags and flags_mode_fake then
+        return plist.get(c, 'Correction active')
+    end
 end)
----------------------
 
-client_set_event_callback('shutdown', function()
-	if ui_get(semirage.hide_useless_features) then
-		ui_set_visible(useless.pitch[1], true)
-		ui_set_visible(useless.yaw_base[1], true)
-		ui_set_visible(useless.yaw[1], true)
-		ui_set_visible(useless.yaw[2], true)
-		ui_set_visible(useless.edge_yaw, true)
-		ui_set_visible(useless.fs[1], true)
-		ui_set_visible(useless.fs[2], true)
-		ui_set_visible(useless.onshot_aa[1], true)
-		ui_set_visible(useless.onshot_aa[2], true)
-		ui_set_visible(useless.fake_peek[1], true)
-		ui_set_visible(useless.fake_peek[2], true)
-		ui_set_visible(useless.double_tap[1], true)
-		ui_set_visible(useless.double_tap[2], true)
-		ui_set_visible(useless.fake_yaw_limit[1], true)
-	end
+client.register_esp_flag('RIGHT', 255, 0, 0, function(c)
+    local body_yaw = ui.get(references.players.body_yaw_slider[1])
+    local flags = ui.get(menu.visuals.flags)
+    local flags_mode_fake = table_contains(ui.get(menu.visuals.flags_mode[1]), 'Resolver')
 
-	if ui_get(aa.antiaim[1]) then
-		ui_set(aa.antiaim[1], false)
-		ui_set(aa.pitch[1], 'Off')
-		ui_set(aa.yaw_base[1], 'Local view')
-		ui_set(aa.yaw[1], 'Off')
-		ui_set(aa.yaw_jitter[1], 'Off')
-		ui_set(aa.body_yaw[1], 'Off')
-		ui_set(aa.fs_body_yaw, false)
-		ui_set(aa.body_yaw_target[1], 'Off')
-		ui_set(aa.edge_yaw, false)
-		ui_set(aa.fake_yaw_limit[1], 0)
-		ui_set(aa.fs[1], '-')
-	end
+    if body_yaw == 60 then
+        if entity.is_enemy(c) and flags and flags_mode_fake then
+            return plist.get(c, 'Force body yaw value')
+        end
+    end
+end)
+
+client.register_esp_flag('LEFT', 255, 0, 0, function(c)
+    local body_yaw = ui.get(references.players.body_yaw_slider[1])
+    local flags = ui.get(menu.visuals.flags)
+    local flags_mode_fake = table_contains(ui.get(menu.visuals.flags_mode[1]), 'Resolver')
+       
+    if body_yaw == -60 then
+        if entity.is_enemy(c) and flags and flags_mode_fake then
+            return plist.get(c, 'Force body yaw value')
+        end
+    end
+end)
+
+client.set_event_callback('shutdown', function()
+    client.color_log(180, 238, 0, '---[ SEMIRAGE ]---')
+    client.color_log(255, 255, 255, 'Goodbye ' .. name .. '!')
+    client.color_log(180, 238, 0, '------------------')
+    ui.set(references.players.reset_all, true)
 end)
