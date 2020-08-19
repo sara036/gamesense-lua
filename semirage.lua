@@ -158,7 +158,7 @@ local references = {
         body_yaw = ui.reference('PLAYERS', 'Adjustments', 'Force body yaw'),
         body_yaw_slider = { ui.reference('PLAYERS', 'Adjustments', 'Force body yaw value') },
         lists = ui.reference('PLAYERS', 'Players', 'Player list'),
-	    whitelist = ui.reference('PLAYERS', 'Adjustments', 'Add to whitelist'),
+	whitelist = ui.reference('PLAYERS', 'Adjustments', 'Add to whitelist'),
         reset_all = ui.reference('PLAYERS', 'Players', 'Reset all'),
         apply_all = ui.reference('PLAYERS', 'Adjustments', 'Apply to all'),
     },
